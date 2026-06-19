@@ -10,6 +10,7 @@ import {
   Platform,
   Modal,
   Animated,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,7 +23,7 @@ import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useBudget, useExpensesList } from '@/hooks/useBudgetAndExpenses';
 import { useTasks } from '@/hooks/useTasks';
-import { useEvents } from '@/hooks/useEventsAndCategories';
+import { useEvents, useUpdateEvent, useDeleteEvent } from '@/hooks/useEventsAndCategories';
 import {
   useNotificationsList,
   useMarkAsRead,
@@ -31,6 +32,19 @@ import {
 } from '@/hooks/useNotifications';
 import { safeFormatDate } from '@/utils/date';
 import { router } from 'expo-router';
+import { useUpdateWorkspace } from '@/hooks/useWorkspaces';
+import * as DocumentPicker from 'expo-document-picker';
+import { useToastStore } from '@/stores/toastStore';
+import { apiRequest } from '@/utils/api';
+
+const resolveFileUrl = (url: string) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  const host = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api').replace('/api', '');
+  return `${host}${url}`;
+};
 
 const CATEGORY_COLORS = ['#E91E63', '#9C27B0', '#3F51B5', '#00BCD4', '#4CAF50', '#FF9800'];
 
@@ -43,6 +57,64 @@ export default function DashboardScreen() {
   const [budgetAnim] = useState(new Animated.Value(0));
   const [tasksAnim] = useState(new Animated.Value(0));
 
+  const [isUpdatingCover, setIsUpdatingCover] = useState(false);
+  const updateWorkspaceMutation = useUpdateWorkspace();
+  const { showToast } = useToastStore();
+
+  const handleUpdateCoverImage = async () => {
+    if (!currentWorkspace) return;
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'image/*',
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      setIsUpdatingCover(true);
+      const asset = result.assets[0];
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('workspaceId', currentWorkspace.id);
+      formData.append('folderId', 'root');
+      
+      formData.append('file', {
+        uri: asset.uri,
+        name: asset.name || 'cover_image.jpg',
+        type: asset.mimeType || 'image/jpeg',
+      } as any);
+
+      // Call documents upload endpoint
+      const uploadData = await apiRequest<{ document: { file_url: string } }>('/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const imageUrl = uploadData.document.file_url;
+
+      // Update workspace cover_image_url
+      await updateWorkspaceMutation.mutateAsync({
+        id: currentWorkspace.id,
+        coverImageUrl: imageUrl,
+      });
+
+      // Update local storage/state with the updated workspace
+      setCurrentWorkspace({
+        ...currentWorkspace,
+        cover_image_url: imageUrl,
+      } as any);
+
+      showToast('Success', 'Cover image updated successfully', 'success');
+    } catch (err: any) {
+      showToast('Error', err.message || 'Failed to update cover image', 'error');
+    } finally {
+      setIsUpdatingCover(false);
+    }
+  };
+
   // Queries
   const { data: budgetData, isLoading: budgetLoading } = useBudget(currentWorkspace?.id);
   const { data: expensesData, isLoading: expensesLoading } = useExpensesList(currentWorkspace?.id);
@@ -52,6 +124,66 @@ export default function DashboardScreen() {
 
   const markAsReadMutation = useMarkAsRead();
   const registerPushTokenMutation = useRegisterPushToken();
+
+  // Event Edit States
+  const [isEditingEvent, setIsEditingEvent] = useState(false);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventDescription, setEventDescription] = useState('');
+  const [eventStartTime, setEventStartTime] = useState('');
+  const [eventEndTime, setEventEndTime] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
+
+  const updateEventMutation = useUpdateEvent();
+  const deleteEventMutation = useDeleteEvent();
+
+  const startEditingEvent = () => {
+    if (!selectedEvent) return;
+    setEventTitle(selectedEvent.title);
+    setEventDescription(selectedEvent.description || '');
+    setEventStartTime(selectedEvent.start_time);
+    setEventEndTime(selectedEvent.end_time);
+    setEventLocation(selectedEvent.location || '');
+    setIsEditingEvent(true);
+  };
+
+  const handleSaveEvent = async () => {
+    if (!selectedEvent || !currentWorkspace) return;
+    if (eventTitle.trim().length === 0) {
+      showToast('Validation Error', 'Event title is required', 'error');
+      return;
+    }
+    try {
+      await updateEventMutation.mutateAsync({
+        id: selectedEvent.id,
+        workspaceId: currentWorkspace.id,
+        title: eventTitle.trim(),
+        description: eventDescription.trim() || undefined,
+        startTime: eventStartTime,
+        endTime: eventEndTime,
+        location: eventLocation.trim() || undefined,
+      });
+      showToast('Success', 'Event updated successfully', 'success');
+      setIsEditingEvent(false);
+      setSelectedEventId(null);
+    } catch (err: any) {
+      showToast('Error', err.message || 'Failed to update event', 'error');
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!selectedEvent || !currentWorkspace) return;
+    try {
+      await deleteEventMutation.mutateAsync({
+        id: selectedEvent.id,
+        workspaceId: currentWorkspace.id,
+      });
+      showToast('Success', 'Event deleted successfully', 'success');
+      setIsEditingEvent(false);
+      setSelectedEventId(null);
+    } catch (err: any) {
+      showToast('Error', err.message || 'Failed to delete event', 'error');
+    }
+  };
 
   // Push notifications registration
   useEffect(() => {
@@ -63,6 +195,19 @@ export default function DashboardScreen() {
       })
       .catch((err) => console.error('Error fetching Expo Push Token:', err));
   }, []);
+
+  // 1. Budget Calculations (Completely Dynamic)
+  const budget = budgetData?.budget;
+  const allocated = budget ? Number(budget.allocated) : 0;
+  const totalSpent = budget ? Number(budget.spent) : 0;
+  const remaining = allocated - totalSpent;
+  const budgetPercent = allocated > 0 ? Math.round((totalSpent / allocated) * 100) : 0;
+
+  // 2. Task metrics
+  const tasks = tasksData?.tasks || [];
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.status === 'Completed').length;
+  const taskProgressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Animate progress bars on load or change
   useEffect(() => {
@@ -85,19 +230,6 @@ export default function DashboardScreen() {
   if (!currentWorkspace) {
     return <WorkspaceSwitcher />;
   }
-
-  // 1. Budget Calculations (Completely Dynamic)
-  const budget = budgetData?.budget;
-  const allocated = budget ? Number(budget.allocated) : 0;
-  const totalSpent = budget ? Number(budget.spent) : 0;
-  const remaining = allocated - totalSpent;
-  const budgetPercent = allocated > 0 ? Math.round((totalSpent / allocated) * 100) : 0;
-
-  // 2. Task metrics
-  const tasks = tasksData?.tasks || [];
-  const totalTasks = tasks.length;
-  const completedTasks = tasks.filter((t) => t.status === 'Completed').length;
-  const taskProgressPercent = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   // Countdown calculations
   const weddingDate = new Date(currentWorkspace.weddingDate || '2026-10-18');
@@ -206,11 +338,33 @@ export default function DashboardScreen() {
 
             {/* Centered Wedding Arch Mandap Illustration */}
             <View style={styles.mandapIllustrationWrapper}>
-              <Image
-                source={require('@/assets/images/wedding_banner.png')}
-                style={styles.mandapIllustration}
-                resizeMode="cover"
-              />
+              {(currentWorkspace as any).cover_image_url ? (
+                <Image
+                  source={{ uri: resolveFileUrl((currentWorkspace as any).cover_image_url) }}
+                  style={styles.mandapIllustration}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={require('@/assets/images/wedding_banner.png')}
+                  style={styles.mandapIllustration}
+                  resizeMode="cover"
+                />
+              )}
+              {(currentWorkspace.role === 'OWNER' || currentWorkspace.role === 'EDITOR') && (
+                <TouchableOpacity
+                  style={(styles as any).editCoverBtn}
+                  onPress={handleUpdateCoverImage}
+                  disabled={isUpdatingCover}
+                  activeOpacity={0.7}
+                >
+                  {isUpdatingCover ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Ionicons name="camera" size={16} color="#FFFFFF" />
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -509,113 +663,219 @@ export default function DashboardScreen() {
           visible={!!selectedEventId}
           transparent={true}
           animationType="fade"
-          onRequestClose={() => setSelectedEventId(null)}
+          onRequestClose={() => {
+            setSelectedEventId(null);
+            setIsEditingEvent(false);
+          }}
         >
           <View style={styles.modalOverlay}>
             <ThemedView type="backgroundElement" style={[styles.modalCard, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
               {/* Header */}
               <View style={styles.modalHeader}>
                 <ThemedText type="smallBold" style={[styles.modalTitle, { color: theme.text }]} numberOfLines={1}>
-                  {selectedEvent?.title || 'Event Details'}
+                  {isEditingEvent ? 'Edit Event' : (selectedEvent?.title || 'Event Details')}
                 </ThemedText>
-                <TouchableOpacity onPress={() => setSelectedEventId(null)} style={styles.modalCloseBtn}>
-                  <Ionicons name="close" size={20} color={theme.text} />
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'center' }}>
+                  {(currentWorkspace.role === 'OWNER' || currentWorkspace.role === 'EDITOR') && !isEditingEvent && (
+                    <TouchableOpacity onPress={startEditingEvent} style={styles.modalCloseBtn}>
+                      <Ionicons name="create-outline" size={20} color={theme.text} />
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => { setSelectedEventId(null); setIsEditingEvent(false); }} style={styles.modalCloseBtn}>
+                    <Ionicons name="close" size={20} color={theme.text} />
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-                {/* Details Section */}
-                <View style={styles.modalDetailsSection}>
-                  <View style={styles.modalDetailItem}>
-                    <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(233, 30, 99, 0.08)' }]}>
-                      <Ionicons name="calendar-outline" size={18} color="#E91E63" />
-                    </View>
-                    <View style={styles.modalDetailTextWrapper}>
-                      <ThemedText type="smallBold" style={{ color: theme.text }}>Date & Time</ThemedText>
-                      <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                        {selectedEvent?.start_time ? safeFormatDate(selectedEvent.start_time, {
-                          weekday: 'short',
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        } as any) : 'N/A'}
-                        {selectedEvent?.end_time ? ` to ${safeFormatDate(selectedEvent.end_time, {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        } as any)}` : ''}
-                      </ThemedText>
+              {isEditingEvent ? (
+                <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                  <View style={{ gap: Spacing.three, paddingBottom: 10 }}>
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">Title</ThemedText>
+                      <TextInput
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                        value={eventTitle}
+                        onChangeText={setEventTitle}
+                        placeholder="e.g. Reception Dinner"
+                        placeholderTextColor={theme.textSecondary}
+                      />
+                    </ThemedView>
+
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">Description</ThemedText>
+                      <TextInput
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, minHeight: 60, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: theme.border }}
+                        value={eventDescription}
+                        onChangeText={setEventDescription}
+                        placeholder="Provide details about the event..."
+                        placeholderTextColor={theme.textSecondary}
+                        multiline
+                        numberOfLines={3}
+                      />
+                    </ThemedView>
+
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">Start Time</ThemedText>
+                      <TextInput
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                        value={eventStartTime}
+                        onChangeText={setEventStartTime}
+                        placeholder="e.g. 2026-10-18T12:00:00Z"
+                        placeholderTextColor={theme.textSecondary}
+                      />
+                    </ThemedView>
+
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">End Time</ThemedText>
+                      <TextInput
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                        value={eventEndTime}
+                        onChangeText={setEventEndTime}
+                        placeholder="e.g. 2026-10-18T18:00:00Z"
+                        placeholderTextColor={theme.textSecondary}
+                      />
+                    </ThemedView>
+
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">Location</ThemedText>
+                      <TextInput
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                        value={eventLocation}
+                        onChangeText={setEventLocation}
+                        placeholder="Venue location..."
+                        placeholderTextColor={theme.textSecondary}
+                      />
+                    </ThemedView>
+
+                    <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two }}>
+                      <TouchableOpacity
+                        style={{ flex: 1, height: 40, borderRadius: 8, backgroundColor: '#E91E63', alignItems: 'center', justifyContent: 'center' }}
+                        onPress={handleSaveEvent}
+                        disabled={updateEventMutation.isPending}
+                      >
+                        {updateEventMutation.isPending ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <ThemedText style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Save</ThemedText>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{ flex: 1, height: 40, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' }}
+                        onPress={handleDeleteEvent}
+                        disabled={deleteEventMutation.isPending}
+                      >
+                        {deleteEventMutation.isPending ? (
+                          <ActivityIndicator size="small" color="#FFFFFF" />
+                        ) : (
+                          <ThemedText style={{ color: '#FFFFFF', fontWeight: 'bold' }}>Delete</ThemedText>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{ flex: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+                        onPress={() => setIsEditingEvent(false)}
+                      >
+                        <ThemedText style={{ color: theme.text }}>Cancel</ThemedText>
+                      </TouchableOpacity>
                     </View>
                   </View>
-
-                  <View style={styles.modalDetailItem}>
-                    <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(76, 175, 80, 0.08)' }]}>
-                      <Ionicons name="location-outline" size={18} color="#4CAF50" />
-                    </View>
-                    <View style={styles.modalDetailTextWrapper}>
-                      <ThemedText type="smallBold" style={{ color: theme.text }}>Location</ThemedText>
-                      <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                        {selectedEvent?.location || 'No location specified'}
-                      </ThemedText>
-                    </View>
-                  </View>
-
-                  {selectedEvent?.description && (
+                </ScrollView>
+              ) : (
+                <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                  {/* Details Section */}
+                  <View style={styles.modalDetailsSection}>
                     <View style={styles.modalDetailItem}>
-                      <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(63, 81, 181, 0.08)' }]}>
-                        <Ionicons name="information-circle-outline" size={18} color="#3F51B5" />
+                      <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(233, 30, 99, 0.08)' }]}>
+                        <Ionicons name="calendar-outline" size={18} color="#E91E63" />
                       </View>
                       <View style={styles.modalDetailTextWrapper}>
-                        <ThemedText type="smallBold" style={{ color: theme.text }}>Description</ThemedText>
+                        <ThemedText type="smallBold" style={{ color: theme.text }}>Date & Time</ThemedText>
                         <ThemedText type="small" style={{ color: theme.textSecondary }}>
-                          {selectedEvent.description}
+                          {selectedEvent?.start_time ? safeFormatDate(selectedEvent.start_time, {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          } as any) : 'N/A'}
+                          {selectedEvent?.end_time ? ` to ${safeFormatDate(selectedEvent.end_time, {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          } as any)}` : ''}
                         </ThemedText>
                       </View>
                     </View>
-                  )}
-                </View>
 
-                {/* Divider */}
-                <View style={styles.modalDivider} />
-
-                {/* Event Tasks checklist */}
-                <View style={styles.modalTasksSection}>
-                  <ThemedText type="smallBold" style={[styles.modalSectionHeader, { color: theme.text }]}>
-                    Tasks ({tasks.filter(t => t.event_id === selectedEventId && t.status === 'Completed').length}/{tasks.filter(t => t.event_id === selectedEventId).length} Completed)
-                  </ThemedText>
-
-                  {tasks.filter((t) => t.event_id === selectedEventId).length === 0 ? (
-                    <ThemedText type="small" style={[styles.modalEmptyTasks, { color: theme.textSecondary }]}>
-                      No tasks associated with this event.
-                    </ThemedText>
-                  ) : (
-                    tasks.filter((t) => t.event_id === selectedEventId).map((task) => (
-                      <View key={task.id} style={styles.modalTaskRow}>
-                        <Ionicons
-                          name={task.status === 'Completed' ? 'checkbox' : 'square-outline'}
-                          size={18}
-                          color={task.status === 'Completed' ? '#4CAF50' : theme.textSecondary}
-                        />
-                        <ThemedText
-                          type="small"
-                          style={[
-                            styles.modalTaskTitle,
-                            {
-                              color: theme.text,
-                              textDecorationLine: task.status === 'Completed' ? 'line-through' : 'none',
-                              opacity: task.status === 'Completed' ? 0.6 : 1
-                            }
-                          ]}
-                          numberOfLines={2}
-                        >
-                          {task.title}
+                    <View style={styles.modalDetailItem}>
+                      <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(76, 175, 80, 0.08)' }]}>
+                        <Ionicons name="location-outline" size={18} color="#4CAF50" />
+                      </View>
+                      <View style={styles.modalDetailTextWrapper}>
+                        <ThemedText type="smallBold" style={{ color: theme.text }}>Location</ThemedText>
+                        <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                          {selectedEvent?.location || 'No location specified'}
                         </ThemedText>
                       </View>
-                    ))
-                  )}
-                </View>
-              </ScrollView>
+                    </View>
+
+                    {selectedEvent?.description && (
+                      <View style={styles.modalDetailItem}>
+                        <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(63, 81, 181, 0.08)' }]}>
+                          <Ionicons name="information-circle-outline" size={18} color="#3F51B5" />
+                        </View>
+                        <View style={styles.modalDetailTextWrapper}>
+                          <ThemedText type="smallBold" style={{ color: theme.text }}>Description</ThemedText>
+                          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                            {selectedEvent.description}
+                          </ThemedText>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Divider */}
+                  <View style={styles.modalDivider} />
+
+                  {/* Event Tasks checklist */}
+                  <View style={styles.modalTasksSection}>
+                    <ThemedText type="smallBold" style={[styles.modalSectionHeader, { color: theme.text }]}>
+                      Tasks ({tasks.filter(t => t.event_id === selectedEventId && t.status === 'Completed').length}/{tasks.filter(t => t.event_id === selectedEventId).length} Completed)
+                    </ThemedText>
+
+                    {tasks.filter((t) => t.event_id === selectedEventId).length === 0 ? (
+                      <ThemedText type="small" style={[styles.modalEmptyTasks, { color: theme.textSecondary }]}>
+                        No tasks associated with this event.
+                      </ThemedText>
+                    ) : (
+                      tasks.filter((t) => t.event_id === selectedEventId).map((task) => (
+                        <View key={task.id} style={styles.modalTaskRow}>
+                          <Ionicons
+                            name={task.status === 'Completed' ? 'checkbox' : 'square-outline'}
+                            size={18}
+                            color={task.status === 'Completed' ? '#4CAF50' : theme.textSecondary}
+                          />
+                          <ThemedText
+                            type="small"
+                            style={[
+                              styles.modalTaskTitle,
+                              {
+                                color: theme.text,
+                                textDecorationLine: task.status === 'Completed' ? 'line-through' : 'none',
+                                opacity: task.status === 'Completed' ? 0.6 : 1
+                              }
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {task.title}
+                          </ThemedText>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </ScrollView>
+              )}
             </ThemedView>
           </View>
         </Modal>
@@ -710,6 +970,10 @@ export default function DashboardScreen() {
 }
 
 const styles = StyleSheet.create({
+  inputWrapper: {
+    gap: Spacing.one,
+    marginBottom: Spacing.two,
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -1177,6 +1441,17 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editCoverBtn: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },

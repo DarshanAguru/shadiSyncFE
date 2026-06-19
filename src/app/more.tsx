@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
+import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -152,6 +153,7 @@ export default function MoreScreen() {
               ]}
               onPress={() => setActiveTab('WORKSPACE')}
             >
+              <Ionicons name="briefcase-outline" size={15} color={activeTab === 'WORKSPACE' ? theme.background : theme.text} />
               <ThemedText style={{ color: activeTab === 'WORKSPACE' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
                 Workspace
               </ThemedText>
@@ -164,6 +166,7 @@ export default function MoreScreen() {
               ]}
               onPress={() => setActiveTab('EVENTS')}
             >
+              <Ionicons name="calendar-outline" size={15} color={activeTab === 'EVENTS' ? theme.background : theme.text} />
               <ThemedText style={{ color: activeTab === 'EVENTS' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
                 Events
               </ThemedText>
@@ -176,6 +179,7 @@ export default function MoreScreen() {
               ]}
               onPress={() => setActiveTab('CATEGORIES')}
             >
+              <Ionicons name="pricetags-outline" size={15} color={activeTab === 'CATEGORIES' ? theme.background : theme.text} />
               <ThemedText style={{ color: activeTab === 'CATEGORIES' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
                 Categories
               </ThemedText>
@@ -188,6 +192,7 @@ export default function MoreScreen() {
               ]}
               onPress={() => setActiveTab('NOTES')}
             >
+              <Ionicons name="document-text-outline" size={15} color={activeTab === 'NOTES' ? theme.background : theme.text} />
               <ThemedText style={{ color: activeTab === 'NOTES' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
                 Notes
               </ThemedText>
@@ -200,6 +205,7 @@ export default function MoreScreen() {
               ]}
               onPress={() => setActiveTab('DOCUMENTS')}
             >
+              <Ionicons name="document-attach-outline" size={15} color={activeTab === 'DOCUMENTS' ? theme.background : theme.text} />
               <ThemedText style={{ color: activeTab === 'DOCUMENTS' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
                 Documents
               </ThemedText>
@@ -615,5 +621,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: Spacing.one,
   },
 });

@@ -16,6 +16,8 @@ export interface ExpenseItem {
   created_at: string;
   category_name: string | null;
   event_title: string | null;
+  task_title: string | null;
+  task_id: string | null;
   creator_name: string | null;
 }
 
@@ -86,6 +88,7 @@ export function useCreateExpense() {
       description?: string;
       categoryId?: string;
       eventId?: string;
+      taskId?: string;
       expenseDate?: string;
     }
   >({
@@ -139,6 +142,7 @@ export function useUpdateExpense() {
       description?: string;
       categoryId?: string;
       eventId?: string;
+      taskId?: string;
       expenseDate?: string;
     }
   >({

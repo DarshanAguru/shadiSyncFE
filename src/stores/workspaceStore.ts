@@ -1,10 +1,11 @@
 import { create } from 'zustand';
 
-interface Workspace {
+export interface Workspace {
   id: string;
   name: string;
   weddingDate: string;
   role: 'OWNER' | 'EDITOR' | 'VIEWER';
+  cover_image_url?: string | null;
 }
 
 interface WorkspaceState {

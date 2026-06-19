@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
 import { safeFormatDate } from '@/utils/date';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -64,8 +64,18 @@ export default function TasksScreen() {
     }
   }, [params.action]);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      if (params.action !== 'create') {
+        setMode('LIST');
+      }
+    }, [params.action])
+  );
+
   // List filters
   const [selectedFilterTab, setSelectedFilterTab] = useState<'My Tasks' | 'All' | 'Completed'>('All');
+  const [selectedEventId, setSelectedEventId] = useState<string>('all');
+  const [showEventFilter, setShowEventFilter] = useState(true);
 
   // Form Fields
   const [title, setTitle] = useState('');
@@ -73,7 +83,7 @@ export default function TasksScreen() {
   const [status, setStatus] = useState<'Pending' | 'In Progress' | 'Completed'>('Pending');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High'>('Medium');
   const [assignedTo, setAssignedTo] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [eventId, setEventId] = useState('');
   const [categoryId, setCategoryId] = useState('');
 
@@ -83,7 +93,7 @@ export default function TasksScreen() {
     setStatus('Pending');
     setPriority('Medium');
     setAssignedTo('');
-    setDueDate('');
+    setDueDate(new Date().toISOString().split('T')[0]);
     setEventId('');
     setCategoryId('');
     setSelectedTask(null);
@@ -218,6 +228,11 @@ export default function TasksScreen() {
   const categories = categoriesData?.categories || [];
   const canCreate = hasPermission(currentWorkspace?.role, 'Tasks', 'create');
   const canEdit = hasPermission(currentWorkspace?.role, 'Tasks', 'edit');
+  const isSelectedTaskEditable = selectedTask 
+    ? (canEdit || selectedTask.assigned_to === currentUser?.id || selectedTask.created_by === currentUser?.id)
+    : true;
+  const isTaskEditable = (task: TaskItem) => 
+    canEdit || task.assigned_to === currentUser?.id || task.created_by === currentUser?.id;
 
   // Stats Counters
   const totalCount = tasks.length;
@@ -238,6 +253,10 @@ export default function TasksScreen() {
     filteredTasks = tasks.filter((t) => t.status === 'Completed');
   }
 
+  if (selectedEventId !== 'all') {
+    filteredTasks = filteredTasks.filter((t) => t.event_id === selectedEventId);
+  }
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -256,7 +275,7 @@ export default function TasksScreen() {
           ) : mode === 'CREATE' || mode === 'EDIT' ? (
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               <ThemedText type="smallBold" style={styles.formTitle}>
-                {mode === 'EDIT' ? (canEdit ? 'Edit Task' : 'Task Details') : 'Create Task'}
+                {mode === 'EDIT' ? (isSelectedTaskEditable ? 'Edit Task' : 'Task Details') : 'Create Task'}
               </ThemedText>
 
               <ThemedView style={styles.form}>
@@ -268,7 +287,7 @@ export default function TasksScreen() {
                     onChangeText={setTitle}
                     placeholder="e.g. Confirm wedding cake design"
                     placeholderTextColor={theme.textSecondary}
-                    editable={mode === 'EDIT' ? canEdit : true}
+                    editable={mode === 'EDIT' ? isSelectedTaskEditable : true}
                   />
                 </ThemedView>
 
@@ -282,7 +301,7 @@ export default function TasksScreen() {
                     placeholderTextColor={theme.textSecondary}
                     multiline
                     numberOfLines={3}
-                    editable={mode === 'EDIT' ? canEdit : true}
+                    editable={mode === 'EDIT' ? isSelectedTaskEditable : true}
                   />
                 </ThemedView>
 
@@ -300,9 +319,9 @@ export default function TasksScreen() {
                           },
                         ]}
                         onPress={() => {
-                          if (mode === 'CREATE' || canEdit) setPriority(p);
+                          if (mode === 'CREATE' || isSelectedTaskEditable) setPriority(p);
                         }}
-                        disabled={mode === 'EDIT' && !canEdit}
+                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                       >
                         <ThemedText style={{ color: priority === p ? theme.background : theme.text, fontSize: 13 }}>
                           {p}
@@ -327,9 +346,9 @@ export default function TasksScreen() {
                             },
                           ]}
                           onPress={() => {
-                            if (canEdit) setStatus(s);
+                            if (isSelectedTaskEditable) setStatus(s);
                           }}
-                          disabled={!canEdit}
+                          disabled={!isSelectedTaskEditable}
                         >
                           <ThemedText style={{ color: status === s ? theme.background : theme.text, fontSize: 13 }}>
                             {s}
@@ -350,9 +369,9 @@ export default function TasksScreen() {
                         { backgroundColor: assignedTo === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
                       ]}
                       onPress={() => {
-                        if (mode === 'CREATE' || canEdit) setAssignedTo('');
+                        if (mode === 'CREATE' || isSelectedTaskEditable) setAssignedTo('');
                       }}
-                      disabled={mode === 'EDIT' && !canEdit}
+                      disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                     >
                       <ThemedText style={{ color: assignedTo === '' ? theme.background : theme.text, fontSize: 13 }}>
                         Unassigned
@@ -366,9 +385,9 @@ export default function TasksScreen() {
                           { backgroundColor: assignedTo === member.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
                         ]}
                         onPress={() => {
-                          if (mode === 'CREATE' || canEdit) setAssignedTo(member.id);
+                          if (mode === 'CREATE' || isSelectedTaskEditable) setAssignedTo(member.id);
                         }}
-                        disabled={mode === 'EDIT' && !canEdit}
+                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                       >
                         <ThemedText style={{ color: assignedTo === member.id ? theme.background : theme.text, fontSize: 13 }}>
                           {member.name}
@@ -391,9 +410,9 @@ export default function TasksScreen() {
                       },
                     ]}
                     onPress={() => {
-                      if (mode === 'CREATE' || canEdit) setShowDatePicker(true);
+                      if (mode === 'CREATE' || isSelectedTaskEditable) setShowDatePicker(true);
                     }}
-                    disabled={mode === 'EDIT' && !canEdit}
+                    disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                   >
                     <ThemedText style={{ color: dueDate ? theme.text : theme.textSecondary }}>
                       {dueDate || 'Select Due Date (Default: None)'}
@@ -429,9 +448,9 @@ export default function TasksScreen() {
                         { backgroundColor: eventId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
                       ]}
                       onPress={() => {
-                        if (mode === 'CREATE' || canEdit) setEventId('');
+                        if (mode === 'CREATE' || isSelectedTaskEditable) setEventId('');
                       }}
-                      disabled={mode === 'EDIT' && !canEdit}
+                      disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                     >
                       <ThemedText style={{ color: eventId === '' ? theme.background : theme.text, fontSize: 13 }}>
                         None
@@ -445,9 +464,9 @@ export default function TasksScreen() {
                           { backgroundColor: eventId === event.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
                         ]}
                         onPress={() => {
-                          if (mode === 'CREATE' || canEdit) setEventId(event.id);
+                          if (mode === 'CREATE' || isSelectedTaskEditable) setEventId(event.id);
                         }}
-                        disabled={mode === 'EDIT' && !canEdit}
+                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                       >
                         <ThemedText style={{ color: eventId === event.id ? theme.background : theme.text, fontSize: 13 }}>
                           {event.title}
@@ -467,9 +486,9 @@ export default function TasksScreen() {
                         { backgroundColor: categoryId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
                       ]}
                       onPress={() => {
-                        if (mode === 'CREATE' || canEdit) setCategoryId('');
+                        if (mode === 'CREATE' || isSelectedTaskEditable) setCategoryId('');
                       }}
-                      disabled={mode === 'EDIT' && !canEdit}
+                      disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                     >
                       <ThemedText style={{ color: categoryId === '' ? theme.background : theme.text, fontSize: 13 }}>
                         None
@@ -483,9 +502,9 @@ export default function TasksScreen() {
                           { backgroundColor: categoryId === cat.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
                         ]}
                         onPress={() => {
-                          if (mode === 'CREATE' || canEdit) setCategoryId(cat.id);
+                          if (mode === 'CREATE' || isSelectedTaskEditable) setCategoryId(cat.id);
                         }}
-                        disabled={mode === 'EDIT' && !canEdit}
+                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                       >
                         <ThemedText style={{ color: categoryId === cat.id ? theme.background : theme.text, fontSize: 13 }}>
                           {cat.name}
@@ -495,7 +514,7 @@ export default function TasksScreen() {
                   </ScrollView>
                 </ThemedView>
 
-                {(mode === 'CREATE' || canEdit) && (
+                {(mode === 'CREATE' || isSelectedTaskEditable) && (
                   <TouchableOpacity
                     style={[styles.button, { backgroundColor: theme.text, marginTop: Spacing.two }]}
                     onPress={mode === 'EDIT' ? handleUpdate : handleCreate}
@@ -518,11 +537,11 @@ export default function TasksScreen() {
                     resetForm();
                   }}
                 >
-                  <ThemedText style={{ color: theme.textSecondary }}>{canEdit || mode === 'CREATE' ? 'Cancel' : 'Go Back'}</ThemedText>
+                  <ThemedText style={{ color: theme.textSecondary }}>{isSelectedTaskEditable || mode === 'CREATE' ? 'Cancel' : 'Go Back'}</ThemedText>
                 </TouchableOpacity>
 
                 {mode === 'EDIT' && selectedTask && (
-                  <AttachmentSection entityType="TASK" entityId={selectedTask.id} readOnly={!canEdit} />
+                  <AttachmentSection entityType="TASK" entityId={selectedTask.id} readOnly={!isSelectedTaskEditable} />
                 )}
               </ThemedView>
             </ScrollView>
@@ -541,8 +560,11 @@ export default function TasksScreen() {
                       <Ionicons name="add" size={22} color={theme.text} />
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-                    <Ionicons name="funnel-outline" size={20} color={theme.text} />
+                  <TouchableOpacity 
+                    style={[styles.headerIconBtn, { backgroundColor: showEventFilter ? theme.text : theme.backgroundElement, borderColor: theme.border }]}
+                    onPress={() => setShowEventFilter(!showEventFilter)}
+                  >
+                    <Ionicons name="funnel-outline" size={20} color={showEventFilter ? theme.background : theme.text} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -583,7 +605,7 @@ export default function TasksScreen() {
                     >
                       <ThemedText
                         style={[
-                          styles.filterTabLabel,
+                           styles.filterTabLabel,
                           { color: isSelected ? theme.background : theme.textSecondary }
                         ]}
                       >
@@ -593,6 +615,44 @@ export default function TasksScreen() {
                   );
                 })}
               </View>
+
+              {/* EVENT FILTER PILLS */}
+              {showEventFilter && (
+                <View style={styles.eventFilterContainer}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eventFilterScroll}>
+                    <TouchableOpacity
+                      style={[
+                        styles.eventFilterPill,
+                        { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                        selectedEventId === 'all' && { backgroundColor: '#E91E63', borderColor: '#E91E63' }
+                      ]}
+                      onPress={() => setSelectedEventId('all')}
+                    >
+                      <ThemedText style={{ fontSize: 12, color: selectedEventId === 'all' ? '#FFFFFF' : theme.textSecondary, fontWeight: 'bold' }}>
+                        All Events
+                      </ThemedText>
+                    </TouchableOpacity>
+                    {events.map((event) => {
+                      const isSelected = selectedEventId === event.id;
+                      return (
+                        <TouchableOpacity
+                          key={event.id}
+                          style={[
+                            styles.eventFilterPill,
+                            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                            isSelected && { backgroundColor: '#E91E63', borderColor: '#E91E63' }
+                          ]}
+                          onPress={() => setSelectedEventId(event.id)}
+                        >
+                          <ThemedText style={{ fontSize: 12, color: isSelected ? '#FFFFFF' : theme.textSecondary, fontWeight: 'bold' }}>
+                            {event.title}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* ADD TASK FULL WIDTH BUTTON */}
               {canCreate && (
@@ -636,7 +696,7 @@ export default function TasksScreen() {
                               }
                             ]}
                             onPress={() => {
-                              if (canEdit) {
+                              if (isTaskEditable(task)) {
                                 handleToggleCompleted(task);
                               } else {
                                 showToast('Permission Denied', 'You do not have permission to modify task status', 'error');
@@ -1040,5 +1100,21 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 6,
     zIndex: 999,
+  },
+  eventFilterContainer: {
+    marginBottom: Spacing.two,
+  },
+  eventFilterScroll: {
+    gap: Spacing.two,
+    paddingHorizontal: Spacing.one,
+    paddingVertical: 4,
+  },
+  eventFilterPill: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

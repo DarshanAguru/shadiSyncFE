@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams, router, useFocusEffect } from 'expo-router';
 import {
   StyleSheet,
   ScrollView,
@@ -31,6 +31,7 @@ import {
   ExpenseItem,
 } from '@/hooks/useBudgetAndExpenses';
 import { useEvents, useCategories } from '@/hooks/useEventsAndCategories';
+import { useTasks } from '@/hooks/useTasks';
 import { hasPermission } from '@/utils/permissions';
 import { PermissionGuard } from '@/components/permissions/PermissionGuard';
 import AttachmentSection from '@/components/attachments/AttachmentSection';
@@ -55,6 +56,9 @@ export default function ExpensesScreen() {
   const { data: expensesData, isLoading: expensesLoading, isError: expensesError, refetch: refetchExpenses } = useExpensesList(currentWorkspace?.id);
   const { data: eventsData } = useEvents(currentWorkspace?.id);
   const { data: categoriesData } = useCategories(currentWorkspace?.id);
+  const { data: tasksData } = useTasks(currentWorkspace?.id);
+
+  const tasks = tasksData?.tasks || [];
 
   const updateBudgetMutation = useUpdateBudget();
   const createExpenseMutation = useCreateExpense();
@@ -70,6 +74,14 @@ export default function ExpensesScreen() {
       router.setParams({ action: undefined });
     }
   }, [params.action]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (params.action !== 'create') {
+        setMode('LIST');
+      }
+    }, [params.action])
+  );
 
   const { showToast } = useToastStore();
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -87,6 +99,7 @@ export default function ExpensesScreen() {
   const [description, setDescription] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedTaskId, setSelectedTaskId] = useState('');
   const [expenseDate, setExpenseDate] = useState('');
 
   const resetExpenseForm = () => {
@@ -94,6 +107,7 @@ export default function ExpensesScreen() {
     setDescription('');
     setSelectedCategoryId('');
     setSelectedEventId('');
+    setSelectedTaskId('');
     setExpenseDate('');
     setSelectedExpense(null);
     setShowDatePicker(false);
@@ -134,6 +148,7 @@ export default function ExpensesScreen() {
         description: description.trim() || undefined,
         categoryId: selectedCategoryId || undefined,
         eventId: selectedEventId || undefined,
+        taskId: selectedTaskId || undefined,
         expenseDate: expenseDate || undefined,
       });
       showToast('Success', 'Expense logged successfully', 'success');
@@ -153,6 +168,9 @@ export default function ExpensesScreen() {
     );
     setSelectedEventId(
       events.find((e) => e.title === expense.event_title)?.id || ''
+    );
+    setSelectedTaskId(
+      tasks.find((t) => t.title === expense.task_title)?.id || ''
     );
     setExpenseDate(expense.expense_date.split('T')[0]);
     setMode('EDIT');
@@ -174,6 +192,7 @@ export default function ExpensesScreen() {
         description: description.trim() || undefined,
         categoryId: selectedCategoryId || undefined,
         eventId: selectedEventId || undefined,
+        taskId: selectedTaskId || undefined,
         expenseDate: expenseDate || undefined,
       });
       showToast('Success', 'Expense updated successfully', 'success');
@@ -445,6 +464,38 @@ export default function ExpensesScreen() {
                       >
                         <ThemedText style={{ color: selectedEventId === event.id ? theme.background : theme.text, fontSize: 13 }}>
                           {event.title}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </ThemedView>
+
+                {/* Task selector */}
+                <ThemedView style={styles.inputWrapper}>
+                  <ThemedText type="smallBold">Task Link</ThemedText>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.selectorBtn,
+                        { backgroundColor: selectedTaskId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
+                      ]}
+                      onPress={() => setSelectedTaskId('')}
+                    >
+                      <ThemedText style={{ color: selectedTaskId === '' ? theme.background : theme.text, fontSize: 13 }}>
+                        None
+                      </ThemedText>
+                    </TouchableOpacity>
+                    {tasks.map((task) => (
+                      <TouchableOpacity
+                        key={task.id}
+                        style={[
+                          styles.selectorBtn,
+                          { backgroundColor: selectedTaskId === task.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
+                        ]}
+                        onPress={() => setSelectedTaskId(task.id)}
+                      >
+                        <ThemedText style={{ color: selectedTaskId === task.id ? theme.background : theme.text, fontSize: 13 }}>
+                          {task.title}
                         </ThemedText>
                       </TouchableOpacity>
                     ))}

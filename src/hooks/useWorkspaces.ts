@@ -9,6 +9,7 @@ export interface Workspace {
   archived: boolean;
   role: 'OWNER' | 'EDITOR' | 'VIEWER';
   created_at: string;
+  cover_image_url?: string | null;
 }
 
 interface FetchWorkspacesResponse {
@@ -56,12 +57,12 @@ export function useUpdateWorkspace() {
   return useMutation<
     WorkspaceResponse,
     Error,
-    { id: string; name: string; weddingDate: string }
+    { id: string; name?: string; weddingDate?: string; coverImageUrl?: string | null }
   >({
-    mutationFn: ({ id, name, weddingDate }) =>
+    mutationFn: ({ id, ...body }) =>
       apiRequest<WorkspaceResponse>(`/workspaces/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ name, weddingDate }),
+        body: JSON.stringify(body),
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });

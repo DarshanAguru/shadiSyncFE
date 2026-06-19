@@ -24,6 +24,30 @@ const resolveFileUrl = (url: string) => {
   const host = (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api').replace('/api', '');
   return `${host}${url}`;
 };
+
+const getFileIconName = (mimeType: string): any => {
+  const type = (mimeType || '').toLowerCase();
+  if (type.includes('image')) return 'image';
+  if (type.includes('pdf')) return 'document-text';
+  if (type.includes('word') || type.includes('officedocument')) return 'document';
+  return 'file-tray-full';
+};
+
+const getFileIconColor = (mimeType: string): string => {
+  const type = (mimeType || '').toLowerCase();
+  if (type.includes('image')) return '#FF9800'; // Orange
+  if (type.includes('pdf')) return '#F44336'; // Red
+  if (type.includes('word') || type.includes('officedocument')) return '#2196F3'; // Blue
+  return '#757575'; // Grey
+};
+
+const getFileIconBg = (mimeType: string): string => {
+  const type = (mimeType || '').toLowerCase();
+  if (type.includes('image')) return 'rgba(255, 152, 0, 0.08)';
+  if (type.includes('pdf')) return 'rgba(244, 67, 54, 0.08)';
+  if (type.includes('word') || type.includes('officedocument')) return 'rgba(33, 150, 243, 0.08)';
+  return 'rgba(117, 117, 117, 0.08)';
+};
 import { ThemedView } from '@/components/themed-view';
 import { WorkspaceGuard } from '@/components/workspaces/WorkspaceGuard';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
@@ -110,14 +134,8 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
       }
 
       // Platform conditional file appending for React Native vs Web
-      if (Platform.OS === 'web') {
-        if ((asset as any).file) {
-          formData.append('file', (asset as any).file, asset.name);
-        } else {
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
-          formData.append('file', blob, asset.name);
-        }
+      if (Platform.OS === 'web' && (asset as any).file) {
+        formData.append('file', (asset as any).file, asset.name);
       } else {
         formData.append('file', {
           uri: asset.uri,
@@ -351,7 +369,7 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                         style={[styles.folderCard, { backgroundColor: theme.backgroundElement }]}
                         onPress={() => handleFolderClick(folder)}
                       >
-                        <ThemedText style={{ fontSize: 28 }}>📁</ThemedText>
+                        <Ionicons name="folder" size={32} color="#E91E63" style={{ marginBottom: 4 }} />
                         <ThemedText type="smallBold" style={styles.folderCardName} numberOfLines={2}>
                           {folder.name}
                         </ThemedText>
@@ -372,7 +390,7 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                 <ActivityIndicator size="small" color={theme.text} />
               ) : documents.length === 0 ? (
                 <ThemedView type="backgroundElement" style={styles.emptyCard}>
-                  <ThemedText style={{ fontSize: 24, marginBottom: 4 }}>📂</ThemedText>
+                  <Ionicons name="folder-open-outline" size={44} color={theme.textSecondary} style={{ marginBottom: 6 }} />
                   <ThemedText type="smallBold">Directory is Empty</ThemedText>
                   <ThemedText type="small" style={styles.placeholderText}>
                     No documents found in this directory. Upload files or select mock templates to populate files.
@@ -382,23 +400,28 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                 <ThemedView style={styles.docList}>
                   {documents.map((doc) => (
                     <ThemedView key={doc.id} type="backgroundElement" style={styles.docRow}>
-                      <ThemedView style={{ flex: 1, gap: 2 }}>
-                        <ThemedText type="smallBold" numberOfLines={1}>
-                          {doc.name.includes('_') && !isNaN(Number(doc.name.split('_')[0])) 
-                            ? doc.name.slice(doc.name.indexOf('_') + 1)
-                            : doc.name}
-                        </ThemedText>
-                        <ThemedView style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
-                          <ThemedView style={styles.mimeBadge}>
-                            <ThemedText style={{ fontSize: 9, color: '#ffffff', fontWeight: 'bold' }}>
-                              {doc.mime_type.split('/')[1]?.toUpperCase() || 'FILE'}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flex: 1 }}>
+                        <View style={[styles.docIconBg, { backgroundColor: getFileIconBg(doc.mime_type) }]}>
+                          <Ionicons name={getFileIconName(doc.mime_type)} size={18} color={getFileIconColor(doc.mime_type)} />
+                        </View>
+                        <ThemedView style={{ flex: 1, gap: 2 }}>
+                          <ThemedText type="smallBold" numberOfLines={1}>
+                            {doc.name.includes('_') && !isNaN(Number(doc.name.split('_')[0])) 
+                              ? doc.name.slice(doc.name.indexOf('_') + 1)
+                              : doc.name}
+                          </ThemedText>
+                          <ThemedView style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+                            <ThemedView style={styles.mimeBadge}>
+                              <ThemedText style={{ fontSize: 9, color: '#ffffff', fontWeight: 'bold' }}>
+                                {doc.mime_type.split('/')[1]?.toUpperCase() || 'FILE'}
+                              </ThemedText>
+                            </ThemedView>
+                            <ThemedText type="small" style={styles.docMetaText}>
+                              {formatSize(doc.file_size)} • By {doc.uploader_name || 'System'}
                             </ThemedText>
                           </ThemedView>
-                          <ThemedText type="small" style={styles.docMetaText}>
-                            {formatSize(doc.file_size)} • By {doc.uploader_name || 'System'}
-                          </ThemedText>
                         </ThemedView>
-                      </ThemedView>
+                      </View>
 
                       <TouchableOpacity
                         style={[styles.viewBtn, { borderColor: theme.border }]}
@@ -549,6 +572,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: Spacing.three,
     borderRadius: 8,
+  },
+  docIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mimeBadge: {
     backgroundColor: '#E91E63',

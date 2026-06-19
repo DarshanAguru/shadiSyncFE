@@ -30,10 +30,10 @@ export default function AppTabs() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Metrics',
+          title: 'Dashboard',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'analytics' : 'analytics-outline'}
+              name={focused ? 'grid' : 'grid-outline'}
               size={22}
               color={color}
             />
@@ -44,7 +44,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="tasks"
         options={{
-          title: 'Tracking',
+          title: 'Tasks',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'checkbox' : 'checkbox-outline'}
