@@ -109,10 +109,22 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
         formData.append('folderId', currentFolderId);
       }
 
-      // Convert local file URI to a standard Blob (compatible with modern WHATWG FormData in RN 0.85+)
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      formData.append('file', blob, asset.name);
+      // Platform conditional file appending for React Native vs Web
+      if (Platform.OS === 'web') {
+        if ((asset as any).file) {
+          formData.append('file', (asset as any).file, asset.name);
+        } else {
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          formData.append('file', blob, asset.name);
+        }
+      } else {
+        formData.append('file', {
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType || 'application/octet-stream',
+        } as any);
+      }
 
       await uploadDocMutation.mutateAsync({
         workspaceId: currentWorkspace.id,

@@ -56,37 +56,6 @@ export default function AppTabs() {
       />
 
       <Tabs.Screen
-        name="create-expense"
-        options={{
-          title: 'Log',
-          tabBarButton: (props) => {
-            return (
-              <TouchableOpacity
-                onPress={() => {
-                  router.push('/expenses?action=create');
-                }}
-                activeOpacity={0.85}
-                style={styles.floatingTabButtonWrapper}
-              >
-                <View style={[
-                  styles.floatingTabButton,
-                  { backgroundColor: colors.text }
-                ]}>
-                  <Ionicons name="add" size={26} color={colors.background} />
-                </View>
-                <ThemedText style={[
-                  styles.tabBarLabelText,
-                  { color: colors.textSecondary }
-                ]}>
-                  Log
-                </ThemedText>
-              </TouchableOpacity>
-            );
-          }
-        }}
-      />
-
-      <Tabs.Screen
         name="expenses"
         options={{
           title: 'Expenses',
@@ -147,34 +116,5 @@ const styles = StyleSheet.create({
   },
   tabBarIcon: {
     marginBottom: -2,
-  },
-  floatingTabButtonWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    top: -14,
-  },
-  floatingTabButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.22,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 5,
-      },
-    }),
-  },
-  tabBarLabelText: {
-    fontSize: 10,
-    fontWeight: '700',
   },
 });

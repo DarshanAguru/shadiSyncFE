@@ -18,7 +18,7 @@ import { hasPermission } from '@/utils/permissions';
 import { PermissionGuard } from '../permissions/PermissionGuard';
 import { safeFormatDate } from '@/utils/date';
 
-export default function EventsTab() {
+export default function EventsTab({ initialMode = 'LIST' }: { initialMode?: 'LIST' | 'CREATE' } = {}) {
   const theme = useTheme();
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
   const { showToast } = useToastStore();
@@ -29,7 +29,7 @@ export default function EventsTab() {
   const deleteMutation = useDeleteEvent();
 
   // Mode States: 'LIST' | 'CREATE' | 'EDIT'
-  const [mode, setMode] = useState<'LIST' | 'CREATE' | 'EDIT'>('LIST');
+  const [mode, setMode] = useState<'LIST' | 'CREATE' | 'EDIT'>(initialMode);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
   // Form Fields

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
 
@@ -26,6 +26,7 @@ export default function MoreScreen() {
   const logout = useAuthStore((state) => state.clearAuth);
   const user = useAuthStore((state) => state.user);
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
+  const { tab, action } = useLocalSearchParams<{ tab?: SettingsTab; action?: string }>();
 
   const updateMutation = useUpdateWorkspace();
   const archiveMutation = useArchiveWorkspace();
@@ -33,6 +34,12 @@ export default function MoreScreen() {
 
   // Navigation tab state
   const [activeTab, setActiveTab] = useState<SettingsTab>('WORKSPACE');
+
+  useEffect(() => {
+    if (tab) {
+      setActiveTab(tab);
+    }
+  }, [tab]);
 
   const { showToast } = useToastStore();
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -450,7 +457,9 @@ export default function MoreScreen() {
             </ThemedView>
           )}
 
-          {activeTab === 'EVENTS' && <EventsTab />}
+          {activeTab === 'EVENTS' && (
+            <EventsTab initialMode={action === 'create' ? 'CREATE' : 'LIST'} />
+          )}
 
           {activeTab === 'CATEGORIES' && <CategoriesTab />}
 

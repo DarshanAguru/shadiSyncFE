@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   Modal,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +30,7 @@ import {
   registerForPushNotificationsAsync,
 } from '@/hooks/useNotifications';
 import { safeFormatDate } from '@/utils/date';
+import { router } from 'expo-router';
 
 const CATEGORY_COLORS = ['#E91E63', '#9C27B0', '#3F51B5', '#00BCD4', '#4CAF50', '#FF9800'];
 
@@ -36,6 +38,10 @@ export default function DashboardScreen() {
   const theme = useTheme();
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [showQuickActions, setShowQuickActions] = useState(false);
+
+  const [budgetAnim] = useState(new Animated.Value(0));
+  const [tasksAnim] = useState(new Animated.Value(0));
 
   // Queries
   const { data: budgetData, isLoading: budgetLoading } = useBudget(currentWorkspace?.id);
@@ -57,6 +63,24 @@ export default function DashboardScreen() {
       })
       .catch((err) => console.error('Error fetching Expo Push Token:', err));
   }, []);
+
+  // Animate progress bars on load or change
+  useEffect(() => {
+    budgetAnim.setValue(0);
+    tasksAnim.setValue(0);
+    Animated.parallel([
+      Animated.timing(budgetAnim, {
+        toValue: budgetPercent || 0,
+        duration: 1200,
+        useNativeDriver: false,
+      }),
+      Animated.timing(tasksAnim, {
+        toValue: taskProgressPercent || 0,
+        duration: 1200,
+        useNativeDriver: false,
+      })
+    ]).start();
+  }, [budgetPercent, taskProgressPercent, currentWorkspace?.id]);
 
   if (!currentWorkspace) {
     return <WorkspaceSwitcher />;
@@ -198,9 +222,17 @@ export default function DashboardScreen() {
 
           {/* 1. Widget: Budget Summary */}
           <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-            <View style={styles.widgetHeaderRow}>
+            <TouchableOpacity
+              style={styles.widgetHeaderRow}
+              onPress={() => router.push('/expenses')}
+              activeOpacity={0.7}
+            >
               <ThemedText type="smallBold" style={[styles.widgetTitle, { color: theme.text }]}>Total Budget</ThemedText>
-            </View>
+              <View style={styles.viewAllRow}>
+                <ThemedText type="small" style={{ color: '#E91E63', fontWeight: 'bold', fontSize: 12 }}>View All</ThemedText>
+                <Ionicons name="chevron-forward" size={14} color="#E91E63" />
+              </View>
+            </TouchableOpacity>
             <ThemedText style={[styles.largeBudgetValue, { color: theme.text }]}>
               {allocated > 0 ? `₹${allocated.toLocaleString('en-IN')}` : 'No Budget Set'}
             </ThemedText>
@@ -209,10 +241,15 @@ export default function DashboardScreen() {
               <>
                 {/* Split Progress Bar (Pink for Spent, Green for Remaining) */}
                 <View style={styles.splitProgressBarBg}>
-                  <View
+                  <Animated.View
                     style={[
                       styles.splitProgressBarSpent,
-                      { width: `${Math.min(budgetPercent, 100)}%` }
+                      {
+                        width: budgetAnim.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: ['0%', '100%'],
+                        })
+                      }
                     ]}
                   />
                 </View>
@@ -241,11 +278,18 @@ export default function DashboardScreen() {
             )}
           </ThemedView>
 
-          {/* 2. Widget: Events Progress (Horizontal scroll of cards) */}
           <View style={styles.sectionWrapper}>
-            <View style={styles.sectionHeaderRow}>
+            <TouchableOpacity
+              style={styles.sectionHeaderRow}
+              onPress={() => router.push('/more?tab=EVENTS')}
+              activeOpacity={0.7}
+            >
               <ThemedText type="smallBold" style={[styles.sectionTitle, { color: theme.text }]}>Events Progress</ThemedText>
-            </View>
+              <View style={styles.viewAllRow}>
+                <ThemedText type="small" style={{ color: '#E91E63', fontWeight: 'bold', fontSize: 12 }}>View All</ThemedText>
+                <Ionicons name="chevron-forward" size={14} color="#E91E63" />
+              </View>
+            </TouchableOpacity>
             
             {eventsList.length === 0 ? (
               <View style={[styles.emptyWidgetState, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -287,9 +331,17 @@ export default function DashboardScreen() {
 
           {/* 3. Widget: Tasks Progress */}
           <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-            <View style={styles.widgetHeaderRow}>
+            <TouchableOpacity
+              style={styles.widgetHeaderRow}
+              onPress={() => router.push('/tasks')}
+              activeOpacity={0.7}
+            >
               <ThemedText type="smallBold" style={[styles.widgetTitle, { color: theme.text }]}>Tasks Progress</ThemedText>
-            </View>
+              <View style={styles.viewAllRow}>
+                <ThemedText type="small" style={{ color: '#E91E63', fontWeight: 'bold', fontSize: 12 }}>View All</ThemedText>
+                <Ionicons name="chevron-forward" size={14} color="#E91E63" />
+              </View>
+            </TouchableOpacity>
             
             {totalTasks > 0 ? (
               <>
@@ -301,11 +353,14 @@ export default function DashboardScreen() {
                 </View>
                 
                 <View style={styles.progressBarBg}>
-                  <View
+                  <Animated.View
                     style={[
                       styles.progressBarFill,
                       {
-                        width: `${taskProgressPercent}%`,
+                        width: tasksAnim.interpolate({
+                          inputRange: [0, 100],
+                          outputRange: ['0%', '100%'],
+                        }),
                         backgroundColor: '#4CAF50',
                       },
                     ]}
@@ -321,9 +376,17 @@ export default function DashboardScreen() {
 
           {/* 4. Widget: Top Expense Categories */}
           <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-            <View style={styles.widgetHeaderRow}>
+            <TouchableOpacity
+              style={styles.widgetHeaderRow}
+              onPress={() => router.push('/expenses')}
+              activeOpacity={0.7}
+            >
               <ThemedText type="smallBold" style={[styles.widgetTitle, { color: theme.text }]}>Top Expense Categories</ThemedText>
-            </View>
+              <View style={styles.viewAllRow}>
+                <ThemedText type="small" style={{ color: '#E91E63', fontWeight: 'bold', fontSize: 12 }}>View All</ThemedText>
+                <Ionicons name="chevron-forward" size={14} color="#E91E63" />
+              </View>
+            </TouchableOpacity>
             
             {categorySpending.length === 0 ? (
               <View style={[styles.emptyWidgetState, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -373,9 +436,17 @@ export default function DashboardScreen() {
 
           {/* 5. Widget: Member Spending Summary */}
           <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
-            <View style={styles.widgetHeaderRow}>
+            <TouchableOpacity
+              style={styles.widgetHeaderRow}
+              onPress={() => router.push('/expenses')}
+              activeOpacity={0.7}
+            >
               <ThemedText type="smallBold" style={[styles.widgetTitle, { color: theme.text }]}>Member Spending Summary</ThemedText>
-            </View>
+              <View style={styles.viewAllRow}>
+                <ThemedText type="small" style={{ color: '#E91E63', fontWeight: 'bold', fontSize: 12 }}>View All</ThemedText>
+                <Ionicons name="chevron-forward" size={14} color="#E91E63" />
+              </View>
+            </TouchableOpacity>
             
             {memberSpending.length === 0 ? (
               <View style={[styles.emptyWidgetState, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
@@ -444,11 +515,11 @@ export default function DashboardScreen() {
             <ThemedView type="backgroundElement" style={[styles.modalCard, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
               {/* Header */}
               <View style={styles.modalHeader}>
-                <ThemedText type="title" style={[styles.modalTitle, { color: theme.text }]} numberOfLines={1}>
+                <ThemedText type="smallBold" style={[styles.modalTitle, { color: theme.text }]} numberOfLines={1}>
                   {selectedEvent?.title || 'Event Details'}
                 </ThemedText>
                 <TouchableOpacity onPress={() => setSelectedEventId(null)} style={styles.modalCloseBtn}>
-                  <Ionicons name="close" size={24} color={theme.text} />
+                  <Ionicons name="close" size={20} color={theme.text} />
                 </TouchableOpacity>
               </View>
 
@@ -456,7 +527,9 @@ export default function DashboardScreen() {
                 {/* Details Section */}
                 <View style={styles.modalDetailsSection}>
                   <View style={styles.modalDetailItem}>
-                    <Ionicons name="calendar-outline" size={18} color="#E91E63" />
+                    <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(233, 30, 99, 0.08)' }]}>
+                      <Ionicons name="calendar-outline" size={18} color="#E91E63" />
+                    </View>
                     <View style={styles.modalDetailTextWrapper}>
                       <ThemedText type="smallBold" style={{ color: theme.text }}>Date & Time</ThemedText>
                       <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -477,7 +550,9 @@ export default function DashboardScreen() {
                   </View>
 
                   <View style={styles.modalDetailItem}>
-                    <Ionicons name="location-outline" size={18} color="#E91E63" />
+                    <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(76, 175, 80, 0.08)' }]}>
+                      <Ionicons name="location-outline" size={18} color="#4CAF50" />
+                    </View>
                     <View style={styles.modalDetailTextWrapper}>
                       <ThemedText type="smallBold" style={{ color: theme.text }}>Location</ThemedText>
                       <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -488,7 +563,9 @@ export default function DashboardScreen() {
 
                   {selectedEvent?.description && (
                     <View style={styles.modalDetailItem}>
-                      <Ionicons name="information-circle-outline" size={18} color="#E91E63" />
+                      <View style={[styles.modalIconBadge, { backgroundColor: 'rgba(63, 81, 181, 0.08)' }]}>
+                        <Ionicons name="information-circle-outline" size={18} color="#3F51B5" />
+                      </View>
                       <View style={styles.modalDetailTextWrapper}>
                         <ThemedText type="smallBold" style={{ color: theme.text }}>Description</ThemedText>
                         <ThemedText type="small" style={{ color: theme.textSecondary }}>
@@ -541,6 +618,91 @@ export default function DashboardScreen() {
               </ScrollView>
             </ThemedView>
           </View>
+        </Modal>
+
+        {/* Quick Actions FAB */}
+        <TouchableOpacity
+          style={[styles.fabButton, { backgroundColor: '#E91E63' }]}
+          onPress={() => setShowQuickActions(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        {/* Quick Actions Modal Overlay */}
+        <Modal
+          visible={showQuickActions}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowQuickActions(false)}
+        >
+          <TouchableOpacity
+            style={styles.quickActionsOverlay}
+            activeOpacity={1}
+            onPress={() => setShowQuickActions(false)}
+          >
+            <ThemedView type="backgroundElement" style={[styles.quickActionsCard, { borderColor: theme.border, backgroundColor: theme.backgroundElement }]}>
+              <View style={styles.quickActionsHeader}>
+                <ThemedText type="smallBold" style={{ fontSize: 18, color: theme.text }}>Quick Actions</ThemedText>
+                <TouchableOpacity onPress={() => setShowQuickActions(false)} style={styles.modalCloseBtn}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.quickActionsList}>
+                <TouchableOpacity
+                  style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
+                  onPress={() => {
+                    setShowQuickActions(false);
+                    router.push('/expenses?action=create');
+                  }}
+                >
+                  <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(233, 30, 99, 0.1)' }]}>
+                    <Ionicons name="wallet-outline" size={22} color="#E91E63" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Log Expense</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Record wedding spending & receipts</ThemedText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
+                  onPress={() => {
+                    setShowQuickActions(false);
+                    router.push('/tasks?action=create');
+                  }}
+                >
+                  <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                    <Ionicons name="checkbox-outline" size={22} color="#4CAF50" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Add Checklist Task</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Create tracking item for wedding planner</ThemedText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
+                  onPress={() => {
+                    setShowQuickActions(false);
+                    router.push('/more?tab=EVENTS&action=create');
+                  }}
+                >
+                  <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(63, 81, 181, 0.1)' }]}>
+                    <Ionicons name="calendar-outline" size={22} color="#3F51B5" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Schedule Event</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Add wedding timeline itinerary slot</ThemedText>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </ThemedView>
+          </TouchableOpacity>
         </Modal>
       </SafeAreaView>
     </ThemedView>
@@ -911,7 +1073,12 @@ const styles = StyleSheet.create({
     marginRight: Spacing.two,
   },
   modalCloseBtn: {
-    padding: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalScroll: {
     flexGrow: 0,
@@ -922,7 +1089,14 @@ const styles = StyleSheet.create({
   modalDetailItem: {
     flexDirection: 'row',
     gap: Spacing.three,
-    alignItems: 'flex-start',
+    alignItems: 'center',
+  },
+  modalIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalDetailTextWrapper: {
     flex: 1,
@@ -952,5 +1126,63 @@ const styles = StyleSheet.create({
   },
   modalTaskTitle: {
     flex: 1,
+  },
+  fabButton: {
+    position: 'absolute',
+    bottom: Spacing.four + 64,
+    right: Spacing.four,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 6,
+    zIndex: 999,
+  },
+  quickActionsOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  quickActionsCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    padding: Spacing.four,
+    paddingBottom: BottomTabInset + Spacing.four,
+    gap: Spacing.three,
+  },
+  quickActionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.two,
+  },
+  quickActionsList: {
+    gap: Spacing.three,
+  },
+  quickActionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.three,
+    borderRadius: 14,
+    gap: Spacing.three,
+  },
+  quickActionIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewAllRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
   },
 });

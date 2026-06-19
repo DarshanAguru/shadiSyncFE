@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
 import { safeFormatDate } from '@/utils/date';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -38,6 +39,7 @@ export default function TasksScreen() {
   const theme = useTheme();
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const currentUser = useAuthStore((state) => state.user);
+  const params = useLocalSearchParams<{ action?: string }>();
 
   const { data: tasksData, isLoading, isError, refetch } = useTasks(currentWorkspace?.id);
   const { data: membersData } = useWorkspaceMembers(currentWorkspace?.id);
@@ -54,6 +56,13 @@ export default function TasksScreen() {
   // Mode States: 'LIST' | 'CREATE' | 'EDIT'
   const [mode, setMode] = useState<'LIST' | 'CREATE' | 'EDIT'>('LIST');
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
+
+  useEffect(() => {
+    if (params.action === 'create') {
+      setMode('CREATE');
+      router.setParams({ action: undefined });
+    }
+  }, [params.action]);
 
   // List filters
   const [selectedFilterTab, setSelectedFilterTab] = useState<'My Tasks' | 'All' | 'Completed'>('All');
