@@ -383,7 +383,6 @@ export default function MoreScreen() {
                                 setWeddingDate(selectedDate.toISOString().split('T')[0]);
                               }
                             }}
-                            onDismiss={() => setShowDatePicker(false)}
                           />
                         )}
                       </ThemedView>

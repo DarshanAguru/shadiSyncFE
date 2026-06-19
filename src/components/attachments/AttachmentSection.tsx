@@ -30,22 +30,33 @@ import {
   useDeleteAttachment,
   AttachmentItem,
 } from '../../hooks/useAttachments';
+import { useFolders, useCreateFolder } from '../../hooks/useDocuments';
 
 interface AttachmentSectionProps {
   entityType: 'EXPENSE' | 'TASK' | 'NOTE' | 'EVENT';
   entityId: string;
   readOnly?: boolean;
+  eventTitle?: string;
+  categoryName?: string;
 }
 
-export default function AttachmentSection({ entityType, entityId, readOnly = false }: AttachmentSectionProps) {
+export default function AttachmentSection({
+  entityType,
+  entityId,
+  readOnly = false,
+  eventTitle,
+  categoryName,
+}: AttachmentSectionProps) {
   const theme = useTheme();
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
   const { showToast } = useToastStore();
 
   const { data: attachmentsData, isLoading: attLoading } = useAttachments(entityType, entityId);
   const { data: docsData, isLoading: docsLoading } = useWorkspaceDocuments(currentWorkspace?.id);
+  const { data: foldersData } = useFolders(currentWorkspace?.id);
 
   const createDocMutation = useCreateDocument();
+  const createFolderMutation = useCreateFolder();
   const createAttachMutation = useCreateAttachment();
   const deleteAttachMutation = useDeleteAttachment(entityType, entityId);
 
@@ -64,12 +75,40 @@ export default function AttachmentSection({ entityType, entityId, readOnly = fal
     const pick = mockFiles[Math.floor(Math.random() * mockFiles.length)];
 
     try {
+      // Determine target folder name based on linked event/category
+      let folderName = '';
+      if (eventTitle && categoryName) {
+        folderName = `${eventTitle} - ${categoryName}`;
+      } else if (eventTitle) {
+        folderName = eventTitle;
+      } else if (categoryName) {
+        folderName = categoryName;
+      }
+
+      let targetFolderId: string | undefined = undefined;
+
+      if (folderName) {
+        const existingFolder = foldersData?.folders?.find(
+          (f) => f.name.toLowerCase() === folderName.toLowerCase()
+        );
+        if (existingFolder) {
+          targetFolderId = existingFolder.id;
+        } else {
+          const newFolder = await createFolderMutation.mutateAsync({
+            workspaceId: currentWorkspace.id,
+            name: folderName,
+          });
+          targetFolderId = newFolder.folder.id;
+        }
+      }
+
       await createDocMutation.mutateAsync({
         workspaceId: currentWorkspace.id,
         name: `${Date.now().toString().slice(-4)}_${pick.name}`,
         fileUrl: pick.url,
         fileSize: pick.size,
         mimeType: pick.mime,
+        folderId: targetFolderId,
       });
       showToast('Success', 'Mock document uploaded successfully', 'success');
     } catch (err: any) {

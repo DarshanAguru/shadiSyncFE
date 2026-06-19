@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '../utils/api';
+import { apiRequest, apiUploadRequest } from '../utils/api';
 import { DocumentItem } from './useAttachments';
+
 
 export interface FolderItem {
   id: string;
@@ -81,10 +82,7 @@ export function useUploadDocument() {
     }
   >({
     mutationFn: ({ formData }) =>
-      apiRequest<{ document: DocumentItem }>('/documents/upload', {
-        method: 'POST',
-        body: formData,
-      }),
+      apiUploadRequest<{ document: DocumentItem }>('/documents/upload', formData),
     onSuccess: (data, variables) => {
       // Invalidate both broad list and specific folder lists
       queryClient.invalidateQueries({ queryKey: ['documentsList', variables.workspaceId] });

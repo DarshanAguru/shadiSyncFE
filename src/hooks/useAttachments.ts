@@ -71,6 +71,7 @@ export function useCreateDocument() {
       fileUrl: string;
       fileSize?: number;
       mimeType?: string;
+      folderId?: string;
     }
   >({
     mutationFn: (variables) =>

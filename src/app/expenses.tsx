@@ -334,7 +334,13 @@ export default function ExpensesScreen() {
                 </TouchableOpacity>
               </ThemedView>
 
-              <AttachmentSection entityType="EXPENSE" entityId={selectedExpense.id} readOnly={!canEditExpense} />
+              <AttachmentSection
+                entityType="EXPENSE"
+                entityId={selectedExpense.id}
+                readOnly={!canEditExpense}
+                eventTitle={selectedExpense.event_title || undefined}
+                categoryName={selectedExpense.category_name || undefined}
+              />
             </ScrollView>
           ) : mode === 'CREATE' || mode === 'EDIT' ? (
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -401,7 +407,6 @@ export default function ExpensesScreen() {
                           setExpenseDate(selectedDate.toISOString().split('T')[0]);
                         }
                       }}
-                      onDismiss={() => setShowDatePicker(false)}
                     />
                   )}
                 </ThemedView>

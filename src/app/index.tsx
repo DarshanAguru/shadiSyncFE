@@ -35,7 +35,7 @@ import { router } from 'expo-router';
 import { useUpdateWorkspace } from '@/hooks/useWorkspaces';
 import * as DocumentPicker from 'expo-document-picker';
 import { useToastStore } from '@/stores/toastStore';
-import { apiRequest } from '@/utils/api';
+import { apiRequest, apiUploadRequest } from '@/utils/api';
 
 const resolveFileUrl = (url: string) => {
   if (!url) return '';
@@ -88,10 +88,7 @@ export default function DashboardScreen() {
       } as any);
 
       // Call documents upload endpoint
-      const uploadData = await apiRequest<{ document: { file_url: string } }>('/documents/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const uploadData = await apiUploadRequest<{ document: { file_url: string } }>('/documents/upload', formData);
 
       const imageUrl = uploadData.document.file_url;
 

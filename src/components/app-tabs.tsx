@@ -82,6 +82,20 @@ export default function AppTabs() {
           ),
         }}
       />
+
+      <Tabs.Screen
+        name="documents"
+        options={{
+          href: null,
+        }}
+      />
+
+      <Tabs.Screen
+        name="create-expense"
+        options={{
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }

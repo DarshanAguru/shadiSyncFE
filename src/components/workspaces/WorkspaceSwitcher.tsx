@@ -156,7 +156,6 @@ export default function WorkspaceSwitcher() {
                     setWeddingDate(selectedDate.toISOString().split('T')[0]);
                   }
                 }}
-                onDismiss={() => setShowDatePicker(false)}
               />
             )}
           </ThemedView>

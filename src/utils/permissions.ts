@@ -22,6 +22,11 @@ export function hasPermission(
 ): boolean {
   if (!role) return false;
 
+  // Allow all roles to perform all actions on Notes module
+  if (moduleName === 'Notes') {
+    return true;
+  }
+
   // 1. OWNER has full access to all modules and actions
   if (role === 'OWNER') {
     return true;

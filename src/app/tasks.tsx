@@ -433,7 +433,6 @@ export default function TasksScreen() {
                           setDueDate(selectedDate.toISOString().split('T')[0]);
                         }
                       }}
-                      onDismiss={() => setShowDatePicker(false)}
                     />
                   )}
                 </ThemedView>
@@ -541,7 +540,13 @@ export default function TasksScreen() {
                 </TouchableOpacity>
 
                 {mode === 'EDIT' && selectedTask && (
-                  <AttachmentSection entityType="TASK" entityId={selectedTask.id} readOnly={!isSelectedTaskEditable} />
+                  <AttachmentSection
+                    entityType="TASK"
+                    entityId={selectedTask.id}
+                    readOnly={!isSelectedTaskEditable}
+                    eventTitle={selectedTask.event_title || undefined}
+                    categoryName={selectedTask.category_name || undefined}
+                  />
                 )}
               </ThemedView>
             </ScrollView>

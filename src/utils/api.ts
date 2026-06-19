@@ -35,3 +35,42 @@ export async function apiRequest<T>(endpoint: string, options: RequestOptions = 
 
   return response.json() as Promise<T>;
 }
+
+export async function apiUploadRequest<T>(endpoint: string, formData: FormData): Promise<T> {
+  const { token } = useAuthStore.getState();
+  const url = `${BASE_URL}${endpoint}`;
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const responseData = JSON.parse(xhr.responseText);
+          resolve(responseData as T);
+        } catch (e) {
+          resolve({} as T);
+        }
+      } else {
+        try {
+          const errorData = JSON.parse(xhr.responseText);
+          reject(new Error(errorData.message || `Request failed with status ${xhr.status}`));
+        } catch (e) {
+          reject(new Error(`Request failed with status ${xhr.status}`));
+        }
+      }
+    };
+
+    xhr.onerror = () => {
+      reject(new Error('Network request failed'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
