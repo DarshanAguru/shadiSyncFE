@@ -9,18 +9,20 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#5D0921', // Deep luxurious burgundy/maroon for high-end wedding text
+    background: '#FAF5F2', // Warm paper-like ivory background
+    backgroundElement: '#FFFFFF', // Clean white card background
+    backgroundSelected: '#F5E6E4', // Soft velvet cream blush for active items
+    textSecondary: '#4E393B', // High-contrast plummy dark gray for readable secondary text
+    border: '#E6D5D1', // Soft warm rose-gold border color
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#FFEBEF', // Soft shimmering rose white for high readability
+    background: '#14080B', // Even darker midnight cherry for amazing OLED contrast
+    backgroundElement: '#241417', // Rich velvet wine card background
+    backgroundSelected: '#3D1C22', // Accented deep rose selection highlight
+    textSecondary: '#D6C0C3', // Highly legible light gold-rose secondary text
+    border: '#3A1E24', // Deep wine border color for dark mode
   },
 } as const;
 
