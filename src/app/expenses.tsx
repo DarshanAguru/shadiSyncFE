@@ -31,7 +31,7 @@ import {
   ExpenseItem,
 } from '@/hooks/useBudgetAndExpenses';
 import { useEvents, useCategories } from '@/hooks/useEventsAndCategories';
-import { useTasks } from '@/hooks/useTasks';
+import { useTasks, useWorkspaceMembers } from '@/hooks/useTasks';
 import { hasPermission } from '@/utils/permissions';
 import { PermissionGuard } from '@/components/permissions/PermissionGuard';
 import AttachmentSection from '@/components/attachments/AttachmentSection';
@@ -57,8 +57,10 @@ export default function ExpensesScreen() {
   const { data: eventsData } = useEvents(currentWorkspace?.id);
   const { data: categoriesData } = useCategories(currentWorkspace?.id);
   const { data: tasksData } = useTasks(currentWorkspace?.id);
+  const { data: membersData } = useWorkspaceMembers(currentWorkspace?.id);
 
   const tasks = tasksData?.tasks || [];
+  const members = membersData?.members || [];
 
   const updateBudgetMutation = useUpdateBudget();
   const createExpenseMutation = useCreateExpense();
@@ -89,6 +91,12 @@ export default function ExpensesScreen() {
 
   // List filters
   const [selectedFilterTab, setSelectedFilterTab] = useState<'All' | 'Unbilled' | 'By Category' | 'By Member'>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterCategoryId, setFilterCategoryId] = useState('all');
+  const [filterEventId, setFilterEventId] = useState('all');
+  const [filterMemberName, setFilterMemberName] = useState('all');
 
   // Budget Edit States (Owner only)
   const [isEditingBudget, setIsEditingBudget] = useState(false);
@@ -238,8 +246,44 @@ export default function ExpensesScreen() {
 
   // Filter logic
   let filteredExpenses = [...rawExpenses];
+
+  // 1. Search Query Filter (by description, category, event, or member name)
+  if (searchQuery.trim().length > 0) {
+    const q = searchQuery.toLowerCase().trim();
+    filteredExpenses = filteredExpenses.filter((e) =>
+      (e.description || '').toLowerCase().includes(q) ||
+      (e.category_name || '').toLowerCase().includes(q) ||
+      (e.event_title || '').toLowerCase().includes(q) ||
+      (e.creator_name || '').toLowerCase().includes(q)
+    );
+  }
+
+  // 2. Category Filter
+  if (filterCategoryId !== 'all') {
+    const category = categories.find((c) => c.id === filterCategoryId);
+    filteredExpenses = filteredExpenses.filter((e) => 
+      category ? e.category_name === category.name : false
+    );
+  }
+
+  // 3. Event Filter
+  if (filterEventId !== 'all') {
+    const event = events.find((evt) => evt.id === filterEventId);
+    filteredExpenses = filteredExpenses.filter((e) => 
+      event ? e.event_title === event.title : false
+    );
+  }
+
+  // 4. Team Member Filter
+  if (filterMemberName !== 'all') {
+    filteredExpenses = filteredExpenses.filter((e) => 
+      e.creator_name === filterMemberName
+    );
+  }
+
+  // 5. Segment tab filter/sorting
   if (selectedFilterTab === 'Unbilled') {
-    filteredExpenses = rawExpenses.filter((e) => !e.event_title);
+    filteredExpenses = filteredExpenses.filter((e) => !e.event_title);
   } else if (selectedFilterTab === 'By Category') {
     filteredExpenses.sort((a, b) => (a.category_name || '').localeCompare(b.category_name || ''));
   } else if (selectedFilterTab === 'By Member') {
@@ -542,11 +586,35 @@ export default function ExpensesScreen() {
                 </TouchableOpacity>
                 <ThemedText type="title" style={[styles.screenCenterTitle, { color: theme.text }]}>Expenses</ThemedText>
                 <View style={styles.headerRightActions}>
-                  <TouchableOpacity style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-                    <Ionicons name="search-outline" size={20} color={theme.text} />
+                  <TouchableOpacity 
+                    style={[
+                      styles.headerIconBtn, 
+                      { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                      showSearch && { backgroundColor: theme.text }
+                    ]}
+                    onPress={() => {
+                      setShowSearch(!showSearch);
+                      if (showSearch) setSearchQuery('');
+                    }}
+                  >
+                    <Ionicons name="search-outline" size={20} color={showSearch ? theme.background : theme.text} />
                   </TouchableOpacity>
-                  <TouchableOpacity style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-                    <Ionicons name="funnel-outline" size={20} color={theme.text} />
+                  <TouchableOpacity 
+                    style={[
+                      styles.headerIconBtn, 
+                      { backgroundColor: theme.backgroundElement, borderColor: theme.border },
+                      showFilters && { backgroundColor: theme.text }
+                    ]}
+                    onPress={() => {
+                      setShowFilters(!showFilters);
+                      if (showFilters) {
+                        setFilterCategoryId('all');
+                        setFilterEventId('all');
+                        setFilterMemberName('all');
+                      }
+                    }}
+                  >
+                    <Ionicons name="funnel-outline" size={20} color={showFilters ? theme.background : theme.text} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -561,6 +629,31 @@ export default function ExpensesScreen() {
                   </View>
                 </View>
                 <ThemedText style={[styles.totalSpentValue, { color: theme.text }]}>₹{spent.toLocaleString('en-IN')}</ThemedText>
+
+                {/* PROGRESS BAR */}
+                <View style={styles.progressContainer}>
+                  <View style={[styles.progressTrack, { backgroundColor: theme.backgroundSelected }]}>
+                    <View 
+                      style={[
+                        styles.progressBar, 
+                        { 
+                          width: `${Math.min((allocated > 0 ? spent / allocated : 0) * 100, 100)}%`, 
+                          backgroundColor: (allocated > 0 ? spent / allocated : 0) > 1 ? '#ff3b30' : '#E91E63' 
+                        }
+                      ]} 
+                    />
+                  </View>
+                  <View style={styles.progressTextRow}>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>
+                      {Math.round((allocated > 0 ? spent / allocated : 0) * 100)}% of budget spent
+                    </ThemedText>
+                    {spent > allocated && (
+                      <ThemedText type="smallBold" style={{ color: '#ff3b30', fontSize: 11 }}>
+                        Over by {formatCurrency(spent - allocated)}!
+                      </ThemedText>
+                    )}
+                  </View>
+                </View>
 
                 {/* Sub-cards stats container */}
                 <View style={styles.subStatsContainer}>
@@ -624,6 +717,148 @@ export default function ExpensesScreen() {
                   </View>
                 )}
               </ThemedView>
+
+              {/* SEARCH BAR INPUT CONTAINER */}
+              {showSearch && (
+                <View style={[styles.searchBarContainer, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                  <Ionicons name="search-outline" size={18} color={theme.textSecondary} />
+                  <TextInput
+                    style={[styles.searchInput, { color: theme.text }]}
+                    placeholder="Search expenses by description..."
+                    placeholderTextColor={theme.textSecondary}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                      <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* FILTERS CONTAINER */}
+              {showFilters && (
+                <View style={[styles.filtersBox, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                  {/* Category Filter */}
+                  <View style={styles.filterSection}>
+                    <ThemedText type="smallBold" style={styles.filterLabel}>Category</ThemedText>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.filterPill,
+                          {
+                            backgroundColor: filterCategoryId === 'all' ? theme.text : theme.backgroundSelected,
+                            borderColor: theme.border,
+                          },
+                        ]}
+                        onPress={() => setFilterCategoryId('all')}
+                      >
+                        <ThemedText style={{ color: filterCategoryId === 'all' ? theme.background : theme.text, fontSize: 11, fontWeight: 'bold' }}>
+                          All Categories
+                        </ThemedText>
+                      </TouchableOpacity>
+                      {categories.map((cat) => (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={[
+                            styles.filterPill,
+                            {
+                              backgroundColor: filterCategoryId === cat.id ? theme.text : theme.backgroundSelected,
+                              borderColor: theme.border,
+                            },
+                          ]}
+                          onPress={() => setFilterCategoryId(cat.id)}
+                        >
+                          <ThemedText style={{ color: filterCategoryId === cat.id ? theme.background : theme.text, fontSize: 11 }}>
+                            {cat.name}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Event Filter */}
+                  <View style={styles.filterSection}>
+                    <ThemedText type="smallBold" style={styles.filterLabel}>Event Link</ThemedText>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.filterPill,
+                          {
+                            backgroundColor: filterEventId === 'all' ? theme.text : theme.backgroundSelected,
+                            borderColor: theme.border,
+                          },
+                        ]}
+                        onPress={() => setFilterEventId('all')}
+                      >
+                        <ThemedText style={{ color: filterEventId === 'all' ? theme.background : theme.text, fontSize: 11, fontWeight: 'bold' }}>
+                          All Events
+                        </ThemedText>
+                      </TouchableOpacity>
+                      {events.map((evt) => (
+                        <TouchableOpacity
+                          key={evt.id}
+                          style={[
+                            styles.filterPill,
+                            {
+                              backgroundColor: filterEventId === evt.id ? theme.text : theme.backgroundSelected,
+                              borderColor: theme.border,
+                            },
+                          ]}
+                          onPress={() => setFilterEventId(evt.id)}
+                        >
+                          <ThemedText style={{ color: filterEventId === evt.id ? theme.background : theme.text, fontSize: 11 }}>
+                            {evt.title}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Member Filter */}
+                  <View style={styles.filterSection}>
+                    <ThemedText type="smallBold" style={styles.filterLabel}>Team Member</ThemedText>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.filterPill,
+                          {
+                            backgroundColor: filterMemberName === 'all' ? theme.text : theme.backgroundSelected,
+                            borderColor: theme.border,
+                          },
+                        ]}
+                        onPress={() => setFilterMemberName('all')}
+                      >
+                        <ThemedText style={{ color: filterMemberName === 'all' ? theme.background : theme.text, fontSize: 11, fontWeight: 'bold' }}>
+                          All Members
+                        </ThemedText>
+                      </TouchableOpacity>
+                      {/* Unique list of creators or members */}
+                      {Array.from(new Set([
+                        ...members.map((m) => m.name),
+                        ...rawExpenses.map((e) => e.creator_name || 'Owner')
+                      ])).filter(Boolean).map((name) => (
+                        <TouchableOpacity
+                          key={name}
+                          style={[
+                            styles.filterPill,
+                            {
+                              backgroundColor: filterMemberName === name ? theme.text : theme.backgroundSelected,
+                              borderColor: theme.border,
+                            },
+                          ]}
+                          onPress={() => setFilterMemberName(name)}
+                        >
+                          <ThemedText style={{ color: filterMemberName === name ? theme.background : theme.text, fontSize: 11 }}>
+                            {name}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </View>
+              )}
 
               {/* HORIZONTAL SEGMENT FILTER TABS */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
@@ -1051,6 +1286,66 @@ const styles = StyleSheet.create({
   outlineButton: {
     height: 40,
     borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressContainer: {
+    marginTop: Spacing.two,
+    gap: Spacing.one,
+  },
+  progressTrack: {
+    height: 8,
+    borderRadius: 4,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  progressBar: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressTextRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: Spacing.three,
+    paddingHorizontal: Spacing.two,
+    height: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: Spacing.two,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    height: '100%',
+  },
+  filtersBox: {
+    marginHorizontal: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: Spacing.two,
+  },
+  filterSection: {
+    gap: 4,
+  },
+  filterLabel: {
+    fontSize: 11,
+    opacity: 0.6,
+  },
+  filterPillsRow: {
+    gap: Spacing.two,
+    paddingVertical: 2,
+  },
+  filterPill: {
+    paddingHorizontal: Spacing.three,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

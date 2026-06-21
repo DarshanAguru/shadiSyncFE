@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -30,6 +31,7 @@ import {
   useRegisterPushToken,
   registerForPushNotificationsAsync,
 } from '@/hooks/useNotifications';
+import { usePendingInvitations, useRespondInvitation } from '@/hooks/useInvitations';
 import { safeFormatDate } from '@/utils/date';
 import { router } from 'expo-router';
 import { useUpdateWorkspace } from '@/hooks/useWorkspaces';
@@ -81,11 +83,24 @@ export default function DashboardScreen() {
       formData.append('workspaceId', currentWorkspace.id);
       formData.append('folderId', 'root');
       
-      formData.append('file', {
-        uri: asset.uri,
-        name: asset.name || 'cover_image.jpg',
-        type: asset.mimeType || 'image/jpeg',
-      } as any);
+      if (Platform.OS === 'web' && (asset as any).file) {
+        formData.append('file', (asset as any).file, asset.name || 'cover_image.jpg');
+      } else {
+        const fileResponse = await fetch(asset.uri);
+        const fileBuffer = await fileResponse.arrayBuffer();
+        const fileBytes = new Uint8Array(fileBuffer);
+
+        formData.append('file', {
+          uri: asset.uri,
+          name: asset.name || 'cover_image.jpg',
+          type: asset.mimeType || 'image/jpeg',
+          file: {
+            name: asset.name || 'cover_image.jpg',
+            type: asset.mimeType || 'image/jpeg',
+            bytes: async () => fileBytes,
+          }
+        } as any);
+      }
 
       // Call documents upload endpoint
       const uploadData = await apiUploadRequest<{ document: { file_url: string } }>('/documents/upload', formData);
@@ -118,9 +133,14 @@ export default function DashboardScreen() {
   const { data: tasksData, isLoading: tasksLoading } = useTasks(currentWorkspace?.id);
   const { data: eventsData, isLoading: eventsLoading } = useEvents(currentWorkspace?.id);
   const { data: notificationsData, isLoading: notificationsLoading } = useNotificationsList();
+  const { data: invitesData, refetch: refetchInvites } = usePendingInvitations();
 
   const markAsReadMutation = useMarkAsRead();
   const registerPushTokenMutation = useRegisterPushToken();
+  const respondInviteMutation = useRespondInvitation();
+
+  const [showNotificationsTray, setShowNotificationsTray] = useState(false);
+  const [notificationsActiveTab, setNotificationsActiveTab] = useState<'notifications' | 'invitations'>('notifications');
 
   // Event Edit States
   const [isEditingEvent, setIsEditingEvent] = useState(false);
@@ -129,6 +149,9 @@ export default function DashboardScreen() {
   const [eventStartTime, setEventStartTime] = useState('');
   const [eventEndTime, setEventEndTime] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+
+  const [showStartPicker, setShowStartPicker] = useState<'none' | 'date' | 'time'>('none');
+  const [showEndPicker, setShowEndPicker] = useState<'none' | 'date' | 'time'>('none');
 
   const updateEventMutation = useUpdateEvent();
   const deleteEventMutation = useDeleteEvent();
@@ -246,7 +269,8 @@ export default function DashboardScreen() {
 
   // 3. Notifications / Activities
   const notifications = notificationsData?.notifications || [];
-  const hasUnread = notifications.some((n) => !n.read_status);
+  const invites = invitesData?.invitations || [];
+  const hasUnread = notifications.some((n) => !n.read_status) || invites.length > 0;
 
   // 4. Member Spending (Dynamic only)
   const expenses = expensesData?.expenses || [];
@@ -327,7 +351,7 @@ export default function DashboardScreen() {
                   {formattedWeddingDateStr} — {countdownText}
                 </ThemedText>
               </View>
-              <TouchableOpacity onPress={handleMarkAllRead} style={styles.headerIconBtn}>
+              <TouchableOpacity onPress={() => setShowNotificationsTray(true)} style={styles.headerIconBtn}>
                 <Ionicons name="notifications" size={22} color="#FFFFFF" />
                 {hasUnread && <View style={styles.unreadHeaderBadge} />}
               </TouchableOpacity>
@@ -713,24 +737,106 @@ export default function DashboardScreen() {
 
                     <ThemedView style={styles.inputWrapper}>
                       <ThemedText type="smallBold">Start Time</ThemedText>
-                      <TextInput
-                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
-                        value={eventStartTime}
-                        onChangeText={setEventStartTime}
-                        placeholder="e.g. 2026-10-18T12:00:00Z"
-                        placeholderTextColor={theme.textSecondary}
-                      />
+                      <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          onPress={() => setShowStartPicker('date')}
+                        >
+                          <ThemedText style={{ color: theme.text }}>
+                            {eventStartTime ? new Date(eventStartTime).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'Select Date'}
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          onPress={() => setShowStartPicker('time')}
+                        >
+                          <ThemedText style={{ color: theme.text }}>
+                            {eventStartTime ? new Date(eventStartTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Select Time'}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                      {showStartPicker === 'date' && (
+                        <DateTimePicker
+                          value={eventStartTime ? new Date(eventStartTime) : new Date()}
+                          mode="date"
+                          display="default"
+                          onChange={(e: any, date?: Date) => {
+                            setShowStartPicker('none');
+                            if (date) {
+                              const current = eventStartTime ? new Date(eventStartTime) : new Date();
+                              current.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                              setEventStartTime(current.toISOString());
+                            }
+                          }}
+                        />
+                      )}
+                      {showStartPicker === 'time' && (
+                        <DateTimePicker
+                          value={eventStartTime ? new Date(eventStartTime) : new Date()}
+                          mode="time"
+                          display="default"
+                          onChange={(e: any, time?: Date) => {
+                            setShowStartPicker('none');
+                            if (time) {
+                              const current = eventStartTime ? new Date(eventStartTime) : new Date();
+                              current.setHours(time.getHours(), time.getMinutes());
+                              setEventStartTime(current.toISOString());
+                            }
+                          }}
+                        />
+                      )}
                     </ThemedView>
 
                     <ThemedView style={styles.inputWrapper}>
                       <ThemedText type="smallBold">End Time</ThemedText>
-                      <TextInput
-                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
-                        value={eventEndTime}
-                        onChangeText={setEventEndTime}
-                        placeholder="e.g. 2026-10-18T18:00:00Z"
-                        placeholderTextColor={theme.textSecondary}
-                      />
+                      <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          onPress={() => setShowEndPicker('date')}
+                        >
+                          <ThemedText style={{ color: theme.text }}>
+                            {eventEndTime ? new Date(eventEndTime).toLocaleDateString(undefined, { dateStyle: 'medium' }) : 'Select Date'}
+                          </ThemedText>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          onPress={() => setShowEndPicker('time')}
+                        >
+                          <ThemedText style={{ color: theme.text }}>
+                            {eventEndTime ? new Date(eventEndTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'Select Time'}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      </View>
+                      {showEndPicker === 'date' && (
+                        <DateTimePicker
+                          value={eventEndTime ? new Date(eventEndTime) : new Date()}
+                          mode="date"
+                          display="default"
+                          onChange={(e: any, date?: Date) => {
+                            setShowEndPicker('none');
+                            if (date) {
+                              const current = eventEndTime ? new Date(eventEndTime) : new Date();
+                              current.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                              setEventEndTime(current.toISOString());
+                            }
+                          }}
+                        />
+                      )}
+                      {showEndPicker === 'time' && (
+                        <DateTimePicker
+                          value={eventEndTime ? new Date(eventEndTime) : new Date()}
+                          mode="time"
+                          display="default"
+                          onChange={(e: any, time?: Date) => {
+                            setShowEndPicker('none');
+                            if (time) {
+                              const current = eventEndTime ? new Date(eventEndTime) : new Date();
+                              current.setHours(time.getHours(), time.getMinutes());
+                              setEventEndTime(current.toISOString());
+                            }
+                          }}
+                        />
+                      )}
                     </ThemedView>
 
                     <ThemedView style={styles.inputWrapper}>
@@ -958,6 +1064,191 @@ export default function DashboardScreen() {
                   <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
                 </TouchableOpacity>
               </View>
+            </ThemedView>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Notifications and Invitations Tray Modal */}
+        <Modal
+          visible={showNotificationsTray}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowNotificationsTray(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowNotificationsTray(false)}
+          >
+            <ThemedView
+              type="backgroundElement"
+              style={[
+                styles.modalCard,
+                { borderColor: theme.border, backgroundColor: theme.backgroundElement, maxHeight: '80%' },
+              ]}
+            >
+              <View style={styles.modalHeader}>
+                <ThemedText type="smallBold" style={[styles.modalTitle, { color: theme.text }]}>
+                  Inbox & Invites
+                </ThemedText>
+                <TouchableOpacity
+                  onPress={() => setShowNotificationsTray(false)}
+                  style={styles.modalCloseBtn}
+                >
+                  <Ionicons name="close" size={20} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Tabs selector */}
+              <View style={styles.trayTabsRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.trayTab,
+                    notificationsActiveTab === 'notifications' && { borderBottomColor: '#E91E63', borderBottomWidth: 2 },
+                  ]}
+                  onPress={() => setNotificationsActiveTab('notifications')}
+                >
+                  <ThemedText
+                    style={{
+                      fontWeight: 'bold',
+                      fontSize: 13,
+                      color: notificationsActiveTab === 'notifications' ? '#E91E63' : theme.textSecondary,
+                    }}
+                  >
+                    Notifications ({notifications.length})
+                  </ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.trayTab,
+                    notificationsActiveTab === 'invitations' && { borderBottomColor: '#E91E63', borderBottomWidth: 2 },
+                  ]}
+                  onPress={() => setNotificationsActiveTab('invitations')}
+                >
+                  <ThemedText
+                    style={{
+                      fontWeight: 'bold',
+                      fontSize: 13,
+                      color: notificationsActiveTab === 'invitations' ? '#E91E63' : theme.textSecondary,
+                    }}
+                  >
+                    Invitations ({invites.length})
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+                {notificationsActiveTab === 'notifications' ? (
+                  notifications.length === 0 ? (
+                    <View style={styles.trayEmptyState}>
+                      <Ionicons name="mail-open-outline" size={40} color={theme.textSecondary} />
+                      <ThemedText type="small" style={{ color: theme.textSecondary, textAlign: 'center', marginTop: 10 }}>
+                        Your inbox is empty
+                      </ThemedText>
+                    </View>
+                  ) : (
+                    <View style={{ gap: Spacing.two, paddingBottom: Spacing.four }}>
+                      {/* Mark all as read link */}
+                      {notifications.some((n) => !n.read_status) && (
+                        <TouchableOpacity onPress={handleMarkAllRead} style={{ alignSelf: 'flex-end', paddingRight: Spacing.one }}>
+                          <ThemedText style={{ color: '#E91E63', fontSize: 12, fontWeight: 'bold' }}>
+                            Mark all as read
+                          </ThemedText>
+                        </TouchableOpacity>
+                      )}
+                      {notifications.map((n) => (
+                        <View
+                          key={n.id}
+                          style={[
+                            styles.trayItemCard,
+                            { backgroundColor: theme.backgroundSelected },
+                            !n.read_status && { borderLeftColor: '#E91E63', borderLeftWidth: 3 },
+                          ]}
+                        >
+                          <View style={{ flex: 1, gap: 2 }}>
+                            <ThemedText type="smallBold" style={{ color: theme.text }}>
+                              {n.title}
+                            </ThemedText>
+                            <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                              {n.message}
+                            </ThemedText>
+                            <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 10, marginTop: 4 }}>
+                              {new Date(n.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                            </ThemedText>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )
+                ) : invites.length === 0 ? (
+                  <View style={styles.trayEmptyState}>
+                    <Ionicons name="people-outline" size={40} color={theme.textSecondary} />
+                    <ThemedText type="small" style={{ color: theme.textSecondary, textAlign: 'center', marginTop: 10 }}>
+                      No workspace invitations pending
+                    </ThemedText>
+                  </View>
+                ) : (
+                  <View style={{ gap: Spacing.two, paddingBottom: Spacing.four }}>
+                    {invites.map((invite) => (
+                      <View
+                        key={invite.id}
+                        style={[styles.trayItemCard, { backgroundColor: theme.backgroundSelected, gap: Spacing.two }]}
+                      >
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <ThemedText type="smallBold" style={{ color: theme.text }}>
+                            Workspace Invite
+                          </ThemedText>
+                          <ThemedText type="small" style={{ color: theme.textSecondary }}>
+                            You have been invited to join the wedding workspace:
+                          </ThemedText>
+                          <ThemedText type="smallBold" style={{ color: theme.text, fontSize: 14, marginVertical: 4 }}>
+                            {invite.workspace_name || 'Wedding Workspace'}
+                          </ThemedText>
+                          <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>
+                            Role: {invite.role} • Invited by: {invite.inviter_name || 'Owner'}
+                          </ThemedText>
+                        </View>
+
+                        {/* Inline Actions */}
+                        <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.one }}>
+                          <TouchableOpacity
+                            style={[styles.trayActionBtn, { backgroundColor: '#4CAF50' }]}
+                            onPress={async () => {
+                              try {
+                                await respondInviteMutation.mutateAsync({ id: invite.id, action: 'ACCEPT' });
+                                showToast('Success', 'Accepted invitation!', 'success');
+                                refetchInvites();
+                              } catch (err: any) {
+                                showToast('Error', err.message || 'Failed to accept invitation', 'error');
+                              }
+                            }}
+                          >
+                            <ThemedText style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                              Accept
+                            </ThemedText>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.trayActionBtn, { backgroundColor: '#ff3b30' }]}
+                            onPress={async () => {
+                              try {
+                                await respondInviteMutation.mutateAsync({ id: invite.id, action: 'REJECT' });
+                                showToast('Success', 'Declined invitation', 'success');
+                                refetchInvites();
+                              } catch (err: any) {
+                                showToast('Error', err.message || 'Failed to decline invitation', 'error');
+                              }
+                            }}
+                          >
+                            <ThemedText style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 12 }}>
+                              Decline
+                            </ThemedText>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
             </ThemedView>
           </TouchableOpacity>
         </Modal>
@@ -1456,5 +1747,34 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
+  },
+  trayTabsRow: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.08)',
+    marginBottom: Spacing.three,
+  },
+  trayTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+  },
+  trayEmptyState: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 180,
+  },
+  trayItemCard: {
+    padding: Spacing.three,
+    borderRadius: 12,
+    gap: 4,
+  },
+  trayActionBtn: {
+    flex: 1,
+    height: 32,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -5,7 +5,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  View,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
 
 import { ThemedText } from '../themed-text';
@@ -39,6 +41,9 @@ export default function EventsTab({ initialMode = 'LIST' }: { initialMode?: 'LIS
   const [endTime, setEndTime] = useState('2026-10-18T18:00:00Z');
   const [location, setLocation] = useState('');
 
+  const [showStartPicker, setShowStartPicker] = useState<'none' | 'date' | 'time'>('none');
+  const [showEndPicker, setShowEndPicker] = useState<'none' | 'date' | 'time'>('none');
+
   const resetForm = () => {
     setTitle('');
     setDescription('');
@@ -46,6 +51,8 @@ export default function EventsTab({ initialMode = 'LIST' }: { initialMode?: 'LIS
     setEndTime('2026-10-18T18:00:00Z');
     setLocation('');
     setSelectedEvent(null);
+    setShowStartPicker('none');
+    setShowEndPicker('none');
   };
 
   const handleCreate = async () => {
@@ -186,25 +193,107 @@ export default function EventsTab({ initialMode = 'LIST' }: { initialMode?: 'LIS
           </ThemedView>
 
           <ThemedView style={styles.inputWrapper}>
-            <ThemedText type="smallBold">Start Time (ISO String)</ThemedText>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
-              value={startTime}
-              onChangeText={setStartTime}
-              placeholder="e.g. 2026-10-18T12:00:00Z"
-              placeholderTextColor={theme.textSecondary}
-            />
+            <ThemedText type="smallBold">Start Time</ThemedText>
+            <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+              <TouchableOpacity
+                style={[styles.input, { flex: 1, backgroundColor: theme.backgroundElement, justifyContent: 'center' }]}
+                onPress={() => setShowStartPicker('date')}
+              >
+                <ThemedText style={{ color: theme.text }}>
+                  {new Date(startTime).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.input, { flex: 1, backgroundColor: theme.backgroundElement, justifyContent: 'center' }]}
+                onPress={() => setShowStartPicker('time')}
+              >
+                <ThemedText style={{ color: theme.text }}>
+                  {new Date(startTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+            {showStartPicker === 'date' && (
+              <DateTimePicker
+                value={new Date(startTime)}
+                mode="date"
+                display="default"
+                onChange={(e: any, date?: Date) => {
+                  setShowStartPicker('none');
+                  if (date) {
+                    const current = new Date(startTime);
+                    current.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                    setStartTime(current.toISOString());
+                  }
+                }}
+              />
+            )}
+            {showStartPicker === 'time' && (
+              <DateTimePicker
+                value={new Date(startTime)}
+                mode="time"
+                display="default"
+                onChange={(e: any, time?: Date) => {
+                  setShowStartPicker('none');
+                  if (time) {
+                    const current = new Date(startTime);
+                    current.setHours(time.getHours(), time.getMinutes());
+                    setStartTime(current.toISOString());
+                  }
+                }}
+              />
+            )}
           </ThemedView>
 
           <ThemedView style={styles.inputWrapper}>
-            <ThemedText type="smallBold">End Time (ISO String)</ThemedText>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.backgroundElement, color: theme.text }]}
-              value={endTime}
-              onChangeText={setEndTime}
-              placeholder="e.g. 2026-10-18T18:00:00Z"
-              placeholderTextColor={theme.textSecondary}
-            />
+            <ThemedText type="smallBold">End Time</ThemedText>
+            <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+              <TouchableOpacity
+                style={[styles.input, { flex: 1, backgroundColor: theme.backgroundElement, justifyContent: 'center' }]}
+                onPress={() => setShowEndPicker('date')}
+              >
+                <ThemedText style={{ color: theme.text }}>
+                  {new Date(endTime).toLocaleDateString(undefined, { dateStyle: 'medium' })}
+                </ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.input, { flex: 1, backgroundColor: theme.backgroundElement, justifyContent: 'center' }]}
+                onPress={() => setShowEndPicker('time')}
+              >
+                <ThemedText style={{ color: theme.text }}>
+                  {new Date(endTime).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+            {showEndPicker === 'date' && (
+              <DateTimePicker
+                value={new Date(endTime)}
+                mode="date"
+                display="default"
+                onChange={(e: any, date?: Date) => {
+                  setShowEndPicker('none');
+                  if (date) {
+                    const current = new Date(endTime);
+                    current.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                    setEndTime(current.toISOString());
+                  }
+                }}
+              />
+            )}
+            {showEndPicker === 'time' && (
+              <DateTimePicker
+                value={new Date(endTime)}
+                mode="time"
+                display="default"
+                onChange={(e: any, time?: Date) => {
+                  setShowEndPicker('none');
+                  if (time) {
+                    const current = new Date(endTime);
+                    current.setHours(time.getHours(), time.getMinutes());
+                    setEndTime(current.toISOString());
+                  }
+                }}
+              />
+            )}
           </ThemedView>
 
           <ThemedView style={styles.inputWrapper}>

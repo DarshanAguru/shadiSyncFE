@@ -133,9 +133,15 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
         formData.append('folderId', currentFolderId);
       }
 
-      // Platform conditional file appending for React Native vs Web
-      if (Platform.OS === 'web' && (asset as any).file) {
-        formData.append('file', (asset as any).file, asset.name);
+      // Android / iOS native-friendly FormData upload
+      if (Platform.OS === 'web') {
+        if ((asset as any).file) {
+          formData.append('file', (asset as any).file, asset.name);
+        } else {
+          const res = await fetch(asset.uri);
+          const blob = await res.blob();
+          formData.append('file', blob, asset.name);
+        }
       } else {
         formData.append('file', {
           uri: asset.uri,
@@ -159,47 +165,7 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
     }
   };
 
-  // Seeding Mock files for easy sandbox review
-  const handleMockUpload = async () => {
-    if (!currentWorkspace) return;
 
-    const samples = [
-      { name: 'catering_menu.pdf', type: 'application/pdf', size: 1258291, uri: 'https://example.com/catering_menu.pdf' },
-      { name: 'venue_blueprint.png', type: 'image/png', size: 3145728, uri: 'https://example.com/venue_blueprint.png' },
-      { name: 'photographer_contract.pdf', type: 'application/pdf', size: 838860, uri: 'https://example.com/photographer_contract.pdf' },
-      { name: 'dj_playlist_v2.pdf', type: 'application/pdf', size: 450200, uri: 'https://example.com/dj_playlist_v2.pdf' },
-    ];
-    const pick = samples[Math.floor(Math.random() * samples.length)];
-
-    setIsUploading(true);
-
-    try {
-      // In a dev environment where formData can be mocked, we can append standard details
-      const formData = new FormData();
-      formData.append('workspaceId', currentWorkspace.id);
-      if (currentFolderId !== 'root') {
-        formData.append('folderId', currentFolderId);
-      }
-
-      // Convert external sample URL to a Blob
-      const response = await fetch(pick.uri);
-      const blob = await response.blob();
-      const mockFileName = `${Date.now().toString().slice(-4)}_${pick.name}`;
-      formData.append('file', blob, mockFileName);
-
-      await uploadDocMutation.mutateAsync({
-        workspaceId: currentWorkspace.id,
-        folderId: currentFolderId === 'root' ? undefined : currentFolderId,
-        formData,
-      });
-
-      showToast('Success', `Mock document "${mockFileName}" generated in folder!`, 'success');
-    } catch (err: any) {
-      showToast('Error', err.message || 'Failed to generate mock document', 'error');
-    } finally {
-      setIsUploading(false);
-    }
-  };
 
   const handleFolderClick = (folder: FolderItem) => {
     setCurrentFolderId(folder.id);
@@ -211,6 +177,8 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
     setCurrentFolderName('');
   };
 
+  const [searchQuery, setSearchQuery] = useState('');
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -219,6 +187,17 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
 
   const folders = foldersData?.folders || [];
   const documents = docsData?.documents || [];
+
+  const filteredFolders = folders.filter((f) =>
+    f.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+  const filteredDocuments = documents.filter((doc) => {
+    const cleanName = doc.name.includes('_') && !isNaN(Number(doc.name.split('_')[0]))
+      ? doc.name.slice(doc.name.indexOf('_') + 1)
+      : doc.name;
+    return cleanName.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
   const canCreate = hasPermission(currentWorkspace?.role, 'Documents', 'create');
 
   const ContainerView = nested ? View : SafeAreaView;
@@ -263,16 +242,6 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                         </ThemedText>
                       )}
                     </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.actionBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.text }]}
-                      onPress={handleMockUpload}
-                      disabled={isUploading}
-                    >
-                      <ThemedText style={{ color: theme.text, fontSize: 12 }}>
-                        🧪 + Mock
-                      </ThemedText>
-                    </TouchableOpacity>
                   </ThemedView>
                 )}
               </ThemedView>
@@ -304,6 +273,23 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                 </ThemedView>
               )
             )}
+
+            {/* Search Input bar */}
+            <ThemedView style={[styles.searchContainer, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+              <Ionicons name="search" size={18} color={theme.textSecondary} style={{ marginRight: 6 }} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.text }]}
+                placeholder="Search folders and documents..."
+                placeholderTextColor={theme.textSecondary}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+                </TouchableOpacity>
+              )}
+            </ThemedView>
 
             {/* Folder creation form */}
             {showFolderForm && (
@@ -359,11 +345,11 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                 <ThemedText type="smallBold">Folders</ThemedText>
                 {foldersLoading ? (
                   <ActivityIndicator size="small" color={theme.text} />
-                ) : folders.length === 0 ? (
-                  <ThemedText type="small" style={styles.emptyText}>No folders created yet.</ThemedText>
+                ) : filteredFolders.length === 0 ? (
+                  <ThemedText type="small" style={styles.emptyText}>No folders found.</ThemedText>
                 ) : (
                   <ThemedView style={styles.folderGrid}>
-                    {folders.map((folder) => (
+                    {filteredFolders.map((folder) => (
                       <TouchableOpacity
                         key={folder.id}
                         style={[styles.folderCard, { backgroundColor: theme.backgroundElement }]}
@@ -388,17 +374,17 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
 
               {docsLoading ? (
                 <ActivityIndicator size="small" color={theme.text} />
-              ) : documents.length === 0 ? (
+              ) : filteredDocuments.length === 0 ? (
                 <ThemedView type="backgroundElement" style={styles.emptyCard}>
                   <Ionicons name="folder-open-outline" size={44} color={theme.textSecondary} style={{ marginBottom: 6 }} />
                   <ThemedText type="smallBold">Directory is Empty</ThemedText>
                   <ThemedText type="small" style={styles.placeholderText}>
-                    No documents found in this directory. Upload files or select mock templates to populate files.
+                    No documents found in this directory. Upload your files to get started.
                   </ThemedText>
                 </ThemedView>
               ) : (
                 <ThemedView style={styles.docList}>
-                  {documents.map((doc) => (
+                  {filteredDocuments.map((doc) => (
                     <ThemedView key={doc.id} type="backgroundElement" style={styles.docRow}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two, flex: 1 }}>
                         <View style={[styles.docIconBg, { backgroundColor: getFileIconBg(doc.mime_type) }]}>
@@ -611,5 +597,19 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 6,
     zIndex: 999,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: Spacing.three,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    paddingVertical: 0,
+    marginLeft: Spacing.one,
   },
 });

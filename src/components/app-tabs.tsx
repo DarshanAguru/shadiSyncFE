@@ -87,6 +87,7 @@ export default function AppTabs() {
         name="documents"
         options={{
           href: null,
+          tabBarButton: () => null,
         }}
       />
 
@@ -94,6 +95,7 @@ export default function AppTabs() {
         name="create-expense"
         options={{
           href: null,
+          tabBarButton: () => null,
         }}
       />
     </Tabs>

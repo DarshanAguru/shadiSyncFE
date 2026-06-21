@@ -64,57 +64,7 @@ export default function AttachmentSection({
   const [showSelectFlow, setShowSelectFlow] = useState(false);
   const [selectedDocId, setSelectedDocId] = useState('');
 
-  // Handle seeding mock document so user has assets to select
-  const handleSeedMockDoc = async () => {
-    if (!currentWorkspace) return;
-    const mockFiles = [
-      { name: 'caterer_invoice.pdf', mime: 'application/pdf', size: 1048576, url: 'https://example.com/files/caterer_invoice.pdf' },
-      { name: 'reception_layout.png', mime: 'image/png', size: 2097152, url: 'https://example.com/files/reception_layout.png' },
-      { name: 'florist_agreement.pdf', mime: 'application/pdf', size: 524288, url: 'https://example.com/files/florist_agreement.pdf' },
-    ];
-    const pick = mockFiles[Math.floor(Math.random() * mockFiles.length)];
 
-    try {
-      // Determine target folder name based on linked event/category
-      let folderName = '';
-      if (eventTitle && categoryName) {
-        folderName = `${eventTitle} - ${categoryName}`;
-      } else if (eventTitle) {
-        folderName = eventTitle;
-      } else if (categoryName) {
-        folderName = categoryName;
-      }
-
-      let targetFolderId: string | undefined = undefined;
-
-      if (folderName) {
-        const existingFolder = foldersData?.folders?.find(
-          (f) => f.name.toLowerCase() === folderName.toLowerCase()
-        );
-        if (existingFolder) {
-          targetFolderId = existingFolder.id;
-        } else {
-          const newFolder = await createFolderMutation.mutateAsync({
-            workspaceId: currentWorkspace.id,
-            name: folderName,
-          });
-          targetFolderId = newFolder.folder.id;
-        }
-      }
-
-      await createDocMutation.mutateAsync({
-        workspaceId: currentWorkspace.id,
-        name: `${Date.now().toString().slice(-4)}_${pick.name}`,
-        fileUrl: pick.url,
-        fileSize: pick.size,
-        mimeType: pick.mime,
-        folderId: targetFolderId,
-      });
-      showToast('Success', 'Mock document uploaded successfully', 'success');
-    } catch (err: any) {
-      showToast('Error', err.message || 'Failed to mock upload document', 'error');
-    }
-  };
 
   const handleAttach = async () => {
     if (!selectedDocId) {
@@ -173,21 +123,8 @@ export default function AttachmentSection({
           ) : documents.length === 0 ? (
             <ThemedView style={styles.emptyFlow}>
               <ThemedText type="small" style={{ opacity: 0.6, textAlign: 'center' }}>
-                No documents registered in this workspace yet. Upload a sample document to test the linkage!
+                No documents registered in this workspace yet. Please upload files in the Documents tab first.
               </ThemedText>
-              <TouchableOpacity
-                style={[styles.seedBtn, { backgroundColor: theme.text }]}
-                onPress={handleSeedMockDoc}
-                disabled={createDocMutation.isPending}
-              >
-                {createDocMutation.isPending ? (
-                  <ActivityIndicator color={theme.background} size="small" />
-                ) : (
-                  <ThemedText style={{ color: theme.background, fontWeight: 'bold', fontSize: 12 }}>
-                    Upload Mock File
-                  </ThemedText>
-                )}
-              </TouchableOpacity>
             </ThemedView>
           ) : (
             <ThemedView style={{ gap: Spacing.two }}>
@@ -219,7 +156,7 @@ export default function AttachmentSection({
 
               <ThemedView style={styles.flowActions}>
                 <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: theme.text }]}
+                  style={[styles.actionBtn, { backgroundColor: theme.text, width: '100%' }]}
                   onPress={handleAttach}
                   disabled={createAttachMutation.isPending}
                 >
@@ -230,15 +167,6 @@ export default function AttachmentSection({
                       Link Selected Document
                     </ThemedText>
                   )}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.actionBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.text }]}
-                  onPress={handleSeedMockDoc}
-                  disabled={createDocMutation.isPending}
-                >
-                  <ThemedText style={{ color: theme.text, fontSize: 12 }}>
-                    Add Another Mock File
-                  </ThemedText>
                 </TouchableOpacity>
               </ThemedView>
             </ThemedView>
