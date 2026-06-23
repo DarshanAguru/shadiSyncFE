@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   View,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -324,7 +325,11 @@ export default function ExpensesScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <WorkspaceGuard currentWorkspace={currentWorkspace}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <WorkspaceGuard currentWorkspace={currentWorkspace}>
           {budgetLoading || expensesLoading ? (
             <ThemedView style={styles.center}>
               <ActivityIndicator size="large" color="#5D0921" />
@@ -1025,7 +1030,8 @@ export default function ExpensesScreen() {
               <Ionicons name="add" size={28} color="#FFFFFF" />
             </TouchableOpacity>
           )}
-        </WorkspaceGuard>
+          </WorkspaceGuard>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
