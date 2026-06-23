@@ -32,9 +32,9 @@ export function hasPermission(
     return true;
   }
 
-  // 2. EDITOR can view, create, and edit, but cannot delete
+  // 2. EDITOR can view, create, edit, and delete
   if (role === 'EDITOR') {
-    return action !== 'delete';
+    return true;
   }
 
   // 3. VIEWER can only view

@@ -19,6 +19,7 @@ export interface ExpenseItem {
   task_title: string | null;
   task_id: string | null;
   creator_name: string | null;
+  created_by?: string | null;
 }
 
 interface FetchBudgetResponse {

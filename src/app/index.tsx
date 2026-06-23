@@ -34,7 +34,7 @@ import {
 import { usePendingInvitations, useRespondInvitation } from '@/hooks/useInvitations';
 import { safeFormatDate } from '@/utils/date';
 import { router } from 'expo-router';
-import { useUpdateWorkspace } from '@/hooks/useWorkspaces';
+import { useUpdateWorkspace, useWorkspaces } from '@/hooks/useWorkspaces';
 import * as DocumentPicker from 'expo-document-picker';
 import { useToastStore } from '@/stores/toastStore';
 import { apiRequest, apiUploadRequest } from '@/utils/api';
@@ -83,22 +83,19 @@ export default function DashboardScreen() {
       formData.append('workspaceId', currentWorkspace.id);
       formData.append('folderId', 'root');
       
-      if (Platform.OS === 'web' && (asset as any).file) {
-        formData.append('file', (asset as any).file, asset.name || 'cover_image.jpg');
+      if (Platform.OS === 'web') {
+        if ((asset as any).file) {
+          formData.append('file', (asset as any).file, asset.name || 'cover_image.jpg');
+        } else {
+          const res = await fetch(asset.uri);
+          const blob = await res.blob();
+          formData.append('file', blob, asset.name || 'cover_image.jpg');
+        }
       } else {
-        const fileResponse = await fetch(asset.uri);
-        const fileBuffer = await fileResponse.arrayBuffer();
-        const fileBytes = new Uint8Array(fileBuffer);
-
         formData.append('file', {
           uri: asset.uri,
           name: asset.name || 'cover_image.jpg',
           type: asset.mimeType || 'image/jpeg',
-          file: {
-            name: asset.name || 'cover_image.jpg',
-            type: asset.mimeType || 'image/jpeg',
-            bytes: async () => fileBytes,
-          }
         } as any);
       }
 
@@ -130,6 +127,7 @@ export default function DashboardScreen() {
   };
 
   // Queries
+  const { data: workspacesData } = useWorkspaces();
   const { data: budgetData, isLoading: budgetLoading } = useBudget(currentWorkspace?.id);
   const { data: expensesData, isLoading: expensesLoading } = useExpensesList(currentWorkspace?.id);
   const { data: tasksData, isLoading: tasksLoading } = useTasks(currentWorkspace?.id);
@@ -248,6 +246,37 @@ export default function DashboardScreen() {
       })
     ]).start();
   }, [budgetPercent, taskProgressPercent, currentWorkspace?.id]);
+
+  useEffect(() => {
+    if (workspacesData?.workspaces && currentWorkspace) {
+      const updated = workspacesData.workspaces.find((w) => w.id === currentWorkspace.id);
+      if (updated) {
+        const cleanDate = (dateStr: string | undefined | null) => {
+          if (!dateStr) return '';
+          return dateStr.split('T')[0];
+        };
+        const newWorkspace = {
+          id: updated.id,
+          name: updated.name,
+          weddingDate: updated.wedding_date,
+          role: updated.role,
+          cover_image_url: updated.cover_image_url,
+          permissions: updated.permissions,
+          allocated_budget: updated.allocated_budget,
+        };
+        if (
+          currentWorkspace.name !== newWorkspace.name ||
+          cleanDate(currentWorkspace.weddingDate) !== cleanDate(newWorkspace.weddingDate) ||
+          currentWorkspace.role !== newWorkspace.role ||
+          currentWorkspace.cover_image_url !== newWorkspace.cover_image_url ||
+          JSON.stringify(currentWorkspace.permissions) !== JSON.stringify(newWorkspace.permissions) ||
+          currentWorkspace.allocated_budget !== newWorkspace.allocated_budget
+        ) {
+          setCurrentWorkspace(newWorkspace);
+        }
+      }
+    }
+  }, [workspacesData, currentWorkspace, setCurrentWorkspace]);
 
   if (!currentWorkspace) {
     return <WorkspaceSwitcher />;

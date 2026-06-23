@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme, Platform, StyleSheet, View, TouchableOpacity } from 'react-native';
@@ -6,11 +7,45 @@ import { Colors } from '@/constants/theme';
 import { ThemedText } from './themed-text';
 
 import { useWorkspaceStore } from '@/stores/workspaceStore';
+import { useWorkspaces } from '@/hooks/useWorkspaces';
 
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' || !scheme ? 'light' : scheme];
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
+  const setCurrentWorkspace = useWorkspaceStore((state) => state.setCurrentWorkspace);
+  const { data: workspacesData } = useWorkspaces();
+
+  useEffect(() => {
+    if (workspacesData?.workspaces && currentWorkspace) {
+      const updated = workspacesData.workspaces.find((w) => w.id === currentWorkspace.id);
+      if (updated) {
+        const cleanDate = (dateStr: string | undefined | null) => {
+          if (!dateStr) return '';
+          return dateStr.split('T')[0];
+        };
+        const newWorkspace = {
+          id: updated.id,
+          name: updated.name,
+          weddingDate: updated.wedding_date,
+          role: updated.role,
+          cover_image_url: updated.cover_image_url,
+          permissions: updated.permissions,
+          allocated_budget: updated.allocated_budget,
+        };
+        if (
+          currentWorkspace.name !== newWorkspace.name ||
+          cleanDate(currentWorkspace.weddingDate) !== cleanDate(newWorkspace.weddingDate) ||
+          currentWorkspace.role !== newWorkspace.role ||
+          currentWorkspace.cover_image_url !== newWorkspace.cover_image_url ||
+          JSON.stringify(currentWorkspace.permissions) !== JSON.stringify(newWorkspace.permissions) ||
+          currentWorkspace.allocated_budget !== newWorkspace.allocated_budget
+        ) {
+          setCurrentWorkspace(newWorkspace);
+        }
+      }
+    }
+  }, [workspacesData, currentWorkspace, setCurrentWorkspace]);
 
   const showTasksTab = (() => {
     if (!currentWorkspace) return true;

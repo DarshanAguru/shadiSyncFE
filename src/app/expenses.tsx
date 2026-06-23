@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
+import { useAuthStore } from '@/stores/authStore';
 import { safeFormatDate } from '@/utils/date';
 
 import { ThemedText } from '@/components/themed-text';
@@ -239,7 +240,13 @@ export default function ExpensesScreen() {
 
   // Load calculations
   const budget = budgetData?.budget;
-  const allocated = budget ? Number(budget.allocated) : 2500000;
+  const user = useAuthStore((state) => state.user);
+  const isPersonalLimit = currentWorkspace?.role !== 'OWNER' && currentWorkspace?.allocated_budget !== null && currentWorkspace?.allocated_budget !== undefined;
+
+  const allocated = isPersonalLimit
+    ? Number(currentWorkspace.allocated_budget)
+    : (budget ? Number(budget.allocated) : 2500000);
+
   const rawExpenses = expensesData?.expenses || [];
   const events = eventsData?.events || [];
   const categories = categoriesData?.categories || [];
@@ -253,6 +260,7 @@ export default function ExpensesScreen() {
   const spent = rawExpenses
     .filter((e) => {
       if (!e.expense_date) return false;
+      if (isPersonalLimit && e.created_by !== user?.id) return false;
       if (dateFilter === 'month') {
         const d = new Date(e.expense_date);
         return d.getFullYear() === currentYear && d.getMonth() === currentMonth;

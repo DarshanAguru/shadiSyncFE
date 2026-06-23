@@ -249,7 +249,7 @@ export default function TasksScreen() {
   console.log('[DEBUG TASKS] Tab:', selectedFilterTab, 'User:', currentUser?.id, 'All Tasks:', tasks.map(t => ({ id: t.id, title: t.title, assigned_to: t.assigned_to, created_by: t.created_by, status: t.status })));
   if (selectedFilterTab === 'My Tasks') {
     filteredTasks = tasks.filter(
-      (t) => t.assigned_to === currentUser?.id || t.created_by === currentUser?.id
+      (t) => t.assigned_to === currentUser?.id
     );
   } else if (selectedFilterTab === 'Completed') {
     filteredTasks = tasks.filter((t) => t.status === 'Completed');
