@@ -121,3 +121,29 @@ export function useWorkspaceMembers(workspaceId: string | undefined) {
     enabled: !!workspaceId,
   });
 }
+
+export function useUpdateWorkspaceMember() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { message: string },
+    Error,
+    {
+      workspaceId: string;
+      targetUserId?: string;
+      invitationId?: string;
+      role?: 'OWNER' | 'EDITOR' | 'VIEWER';
+      permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> | null;
+      allocatedBudget?: number | string | null;
+    }
+  >({
+    mutationFn: ({ workspaceId, ...body }) =>
+      apiRequest<{ message: string }>(`/workspaces/${workspaceId}/members`, {
+        method: 'PUT',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['workspaceMembers', variables.workspaceId] });
+    },
+  });
+}

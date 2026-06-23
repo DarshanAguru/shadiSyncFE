@@ -254,7 +254,8 @@ export default function DashboardScreen() {
   }
 
   // Countdown calculations
-  const weddingDate = new Date(currentWorkspace.weddingDate || '2026-10-18');
+  const todayDateStr = new Date().toISOString().split('T')[0];
+  const weddingDate = new Date(currentWorkspace.weddingDate || todayDateStr);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffTime = weddingDate.getTime() - today.getTime();
@@ -330,7 +331,7 @@ export default function DashboardScreen() {
 
   const isDataLoading = budgetLoading || expensesLoading || tasksLoading || notificationsLoading || eventsLoading;
 
-  const formattedWeddingDateStr = safeFormatDate(currentWorkspace.weddingDate || '2026-10-18', {
+  const formattedWeddingDateStr = safeFormatDate(currentWorkspace.weddingDate || todayDateStr, {
     day: 'numeric',
     month: 'short',
     year: 'numeric'

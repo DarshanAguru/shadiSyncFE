@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -13,7 +13,7 @@ import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
-import { useUpdateWorkspace, useArchiveWorkspace, useWorkspaceMembers } from '@/hooks/useWorkspaces';
+import { useUpdateWorkspace, useArchiveWorkspace, useWorkspaceMembers, useUpdateWorkspaceMember } from '@/hooks/useWorkspaces';
 import { useSendInvitation } from '@/hooks/useInvitations';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -64,11 +64,100 @@ export default function MoreScreen() {
   const [allocatedBudget, setAllocatedBudget] = useState('');
 
   const { data: membersData, isLoading: membersLoading } = useWorkspaceMembers(currentWorkspace?.id);
+  const updateMemberMutation = useUpdateWorkspaceMember();
+
+  // Edit member/invite states
+  const [editingMember, setEditingMember] = useState<any>(null);
+  const [editingInvite, setEditingInvite] = useState<any>(null);
+  const [editRole, setEditRole] = useState<'EDITOR' | 'VIEWER'>('EDITOR');
+  const [editBudget, setEditBudget] = useState('');
+  const [editModules, setEditModules] = useState<string[]>([]);
+
+  const handleStartEditMember = (member: any) => {
+    setEditingMember(member);
+    setEditingInvite(null);
+    setEditRole(member.role === 'OWNER' ? 'EDITOR' : member.role);
+    setEditBudget(member.allocated_budget ? String(member.allocated_budget) : '');
+    
+    const mods: string[] = [];
+    if (member.permissions) {
+      Object.keys(member.permissions).forEach((mod) => {
+        if (member.permissions[mod]?.view !== false) {
+          mods.push(mod);
+        }
+      });
+    } else {
+      mods.push('Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget');
+    }
+    setEditModules(mods);
+  };
+
+  const handleStartEditInvite = (invite: any) => {
+    setEditingInvite(invite);
+    setEditingMember(null);
+    setEditRole(invite.role);
+    setEditBudget(invite.allocated_budget ? String(invite.allocated_budget) : '');
+    
+    const mods: string[] = [];
+    if (invite.permissions) {
+      Object.keys(invite.permissions).forEach((mod) => {
+        if (invite.permissions[mod]?.view !== false) {
+          mods.push(mod);
+        }
+      });
+    } else {
+      mods.push('Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget');
+    }
+    setEditModules(mods);
+  };
+
+  const handleSaveMemberEdit = async () => {
+    if (!currentWorkspace) return;
+    try {
+      const permissions: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> = {};
+      const modules = ['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'];
+      modules.forEach(mod => {
+        const isAllowed = editModules.includes(mod);
+        permissions[mod] = {
+          view: isAllowed,
+          create: isAllowed,
+          edit: isAllowed,
+          delete: isAllowed && editRole !== 'VIEWER',
+        };
+      });
+
+      const budgetNum = editBudget ? parseFloat(editBudget) : null;
+
+      if (editingMember) {
+        await updateMemberMutation.mutateAsync({
+          workspaceId: currentWorkspace.id,
+          targetUserId: editingMember.id,
+          role: editRole,
+          permissions,
+          allocatedBudget: budgetNum,
+        });
+        showToast('Success', 'Member updated successfully', 'success');
+      } else if (editingInvite) {
+        await updateMemberMutation.mutateAsync({
+          workspaceId: currentWorkspace.id,
+          invitationId: editingInvite.id,
+          role: editRole,
+          permissions,
+          allocatedBudget: budgetNum,
+        });
+        showToast('Success', 'Invitation updated successfully', 'success');
+      }
+      setEditingMember(null);
+      setEditingInvite(null);
+    } catch (err: any) {
+      showToast('Error', err.message || 'Failed to update settings', 'error');
+    }
+  };
 
   useEffect(() => {
     if (currentWorkspace) {
       setName(currentWorkspace.name);
-      setWeddingDate(currentWorkspace.weddingDate);
+      setWeddingDate(currentWorkspace.weddingDate || new Date().toISOString().split('T')[0]);
     }
   }, [currentWorkspace]);
 
@@ -457,6 +546,15 @@ export default function MoreScreen() {
                             <ThemedText style={[styles.permissionsSummary, { color: permText.startsWith('Restricted') ? '#ff3b30' : theme.textSecondary }]}>
                               Permissions: {permText}
                             </ThemedText>
+                            {isOwner && member.role !== 'OWNER' && (
+                              <TouchableOpacity
+                                style={[styles.editMemberBtn, { borderColor: theme.border }]}
+                                onPress={() => handleStartEditMember(member)}
+                              >
+                                <Ionicons name="create-outline" size={14} color={theme.text} />
+                                <ThemedText style={{ fontSize: 12 }}>Edit Permissions & Budget</ThemedText>
+                              </TouchableOpacity>
+                            )}
                           </ThemedView>
                         );
                       })}
@@ -495,6 +593,15 @@ export default function MoreScreen() {
                                 <ThemedText style={[styles.permissionsSummary, { color: permText.startsWith('Restricted') ? '#ff3b30' : theme.textSecondary }]}>
                                   Permissions: {permText}
                                 </ThemedText>
+                                {isOwner && (
+                                  <TouchableOpacity
+                                    style={[styles.editMemberBtn, { borderColor: theme.border }]}
+                                    onPress={() => handleStartEditInvite(invite)}
+                                  >
+                                    <Ionicons name="create-outline" size={14} color={theme.text} />
+                                    <ThemedText style={{ fontSize: 12 }}>Edit Permissions & Budget</ThemedText>
+                                  </TouchableOpacity>
+                                )}
                               </ThemedView>
                             );
                           })}
@@ -502,6 +609,134 @@ export default function MoreScreen() {
                       )}
                     </ThemedView>
                   )}
+
+                  {/* Edit member modal */}
+                  <Modal
+                    visible={!!editingMember || !!editingInvite}
+                    transparent
+                    animationType="slide"
+                    onRequestClose={() => {
+                      setEditingMember(null);
+                      setEditingInvite(null);
+                    }}
+                  >
+                    <ThemedView style={styles.modalOverlay}>
+                      <ThemedView type="backgroundElement" style={[styles.modalContent, { backgroundColor: theme.backgroundElement }]}>
+                        <ThemedView style={styles.modalHeader}>
+                          <ThemedText type="smallBold" style={{ fontSize: 18 }}>
+                            Edit Settings: {editingMember ? editingMember.name : editingInvite?.phone_number}
+                          </ThemedText>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setEditingMember(null);
+                              setEditingInvite(null);
+                            }}
+                          >
+                            <Ionicons name="close" size={24} color={theme.text} />
+                          </TouchableOpacity>
+                        </ThemedView>
+
+                        <ScrollView contentContainerStyle={{ gap: Spacing.three, paddingBottom: Spacing.four }} showsVerticalScrollIndicator={false}>
+                          <ThemedView style={styles.inputWrapper}>
+                            <ThemedText type="smallBold">Role</ThemedText>
+                            <ThemedView style={styles.roleContainer}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.roleSelectBtn,
+                                  {
+                                    backgroundColor: editRole === 'EDITOR' ? theme.text : theme.background,
+                                    borderColor: theme.text,
+                                  },
+                                ]}
+                                onPress={() => setEditRole('EDITOR')}
+                              >
+                                <ThemedText style={{ color: editRole === 'EDITOR' ? theme.background : theme.text }}>
+                                  Editor
+                                </ThemedText>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.roleSelectBtn,
+                                  {
+                                    backgroundColor: editRole === 'VIEWER' ? theme.text : theme.background,
+                                    borderColor: theme.text,
+                                  },
+                                ]}
+                                onPress={() => setEditRole('VIEWER')}
+                              >
+                                <ThemedText style={{ color: editRole === 'VIEWER' ? theme.background : theme.text }}>
+                                  Viewer
+                                </ThemedText>
+                              </TouchableOpacity>
+                            </ThemedView>
+                          </ThemedView>
+
+                          <ThemedView style={styles.inputWrapper}>
+                            <ThemedText type="smallBold">Budget Limit (Optional)</ThemedText>
+                            <TextInput
+                              style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
+                              placeholder="e.g. 50000"
+                              placeholderTextColor={theme.textSecondary}
+                              value={editBudget}
+                              onChangeText={setEditBudget}
+                              keyboardType="numeric"
+                            />
+                          </ThemedView>
+
+                          <ThemedView style={styles.inputWrapper}>
+                            <ThemedText type="smallBold">Allowed Sections (Module Access)</ThemedText>
+                            <ThemedView style={styles.checkboxContainer}>
+                              {['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'].map((mod) => {
+                                const isChecked = editModules.includes(mod);
+                                return (
+                                  <TouchableOpacity
+                                    key={mod}
+                                    style={[
+                                      styles.checkboxBtn,
+                                      {
+                                        borderColor: isChecked ? theme.text : theme.border,
+                                        backgroundColor: isChecked ? 'rgba(233, 30, 99, 0.08)' : 'transparent',
+                                      },
+                                    ]}
+                                    onPress={() => {
+                                      if (isChecked) {
+                                        setEditModules(editModules.filter(m => m !== mod));
+                                      } else {
+                                        setEditModules([...editModules, mod]);
+                                      }
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name={isChecked ? 'checkbox-outline' : 'square-outline'}
+                                      size={14}
+                                      color={isChecked ? theme.text : theme.textSecondary}
+                                    />
+                                    <ThemedText style={{ fontSize: 12, color: isChecked ? theme.text : theme.textSecondary }}>
+                                      {mod}
+                                    </ThemedText>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </ThemedView>
+                          </ThemedView>
+
+                          <TouchableOpacity
+                            style={[styles.button, { backgroundColor: theme.text, marginTop: Spacing.two }]}
+                            onPress={handleSaveMemberEdit}
+                            disabled={updateMemberMutation.isPending}
+                          >
+                            {updateMemberMutation.isPending ? (
+                              <ActivityIndicator color={theme.background} />
+                            ) : (
+                              <ThemedText style={{ color: theme.background, fontWeight: 'bold' }}>
+                                Save Settings
+                              </ThemedText>
+                            )}
+                          </TouchableOpacity>
+                        </ScrollView>
+                      </ThemedView>
+                    </ThemedView>
+                  </Modal>
                 </ThemedView>
               )}
 
@@ -838,5 +1073,34 @@ const styles = StyleSheet.create({
     fontSize: 11,
     opacity: 0.6,
     marginTop: 2,
+  },
+  editMemberBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+    paddingHorizontal: Spacing.two,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginTop: Spacing.one,
+    justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: Spacing.four,
+    maxHeight: '85%',
+    gap: Spacing.three,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.two,
   },
 });

@@ -422,7 +422,7 @@ export default function TasksScreen() {
                     disabled={mode === 'EDIT' && !isSelectedTaskEditable}
                   >
                     <ThemedText style={{ color: dueDate ? theme.text : theme.textSecondary }}>
-                      {dueDate || 'Select Due Date (Default: None)'}
+                      {dueDate || 'Select Due Date (Default: Today)'}
                     </ThemedText>
                   </TouchableOpacity>
                   {showDatePicker && (
