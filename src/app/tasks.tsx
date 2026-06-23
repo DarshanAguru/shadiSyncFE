@@ -134,7 +134,7 @@ export default function TasksScreen() {
     setStatus(task.status);
     setPriority(task.priority);
     setAssignedTo(task.assigned_to || '');
-    setDueDate(task.due_date ? task.due_date.split('T')[0] : '');
+    setDueDate(task.due_date ? task.due_date.split('T')[0] : new Date().toISOString().split('T')[0]);
     setEventId(task.event_id || '');
     setCategoryId(task.category_id || '');
     setMode('EDIT');

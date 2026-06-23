@@ -34,11 +34,17 @@ export default function EventsTab({ initialMode = 'LIST' }: { initialMode?: 'LIS
   const [mode, setMode] = useState<'LIST' | 'CREATE' | 'EDIT'>(initialMode);
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
+  const getTodayAtHour = (hour: number) => {
+    const d = new Date();
+    d.setHours(hour, 0, 0, 0);
+    return d.toISOString();
+  };
+
   // Form Fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [startTime, setStartTime] = useState('2026-10-18T12:00:00Z');
-  const [endTime, setEndTime] = useState('2026-10-18T18:00:00Z');
+  const [startTime, setStartTime] = useState(getTodayAtHour(12));
+  const [endTime, setEndTime] = useState(getTodayAtHour(18));
   const [location, setLocation] = useState('');
 
   const [showStartPicker, setShowStartPicker] = useState<'none' | 'date' | 'time'>('none');
@@ -47,8 +53,8 @@ export default function EventsTab({ initialMode = 'LIST' }: { initialMode?: 'LIS
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setStartTime('2026-10-18T12:00:00Z');
-    setEndTime('2026-10-18T18:00:00Z');
+    setStartTime(getTodayAtHour(12));
+    setEndTime(getTodayAtHour(18));
     setLocation('');
     setSelectedEvent(null);
     setShowStartPicker('none');

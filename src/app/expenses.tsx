@@ -111,7 +111,7 @@ export default function ExpensesScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
-  const [expenseDate, setExpenseDate] = useState('');
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
 
   const resetExpenseForm = () => {
     setAmount('');
@@ -119,7 +119,7 @@ export default function ExpensesScreen() {
     setSelectedCategoryId('');
     setSelectedEventId('');
     setSelectedTaskId('');
-    setExpenseDate('');
+    setExpenseDate(new Date().toISOString().split('T')[0]);
     setSelectedExpense(null);
     setShowDatePicker(false);
   };

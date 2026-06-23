@@ -30,7 +30,7 @@ export default function WorkspaceSwitcher() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [name, setName] = useState('');
-  const [weddingDate, setWeddingDate] = useState('2026-10-18'); // Default placeholder date
+  const [weddingDate, setWeddingDate] = useState(new Date().toISOString().split('T')[0]);
 
   const handleSelect = (ws: Workspace) => {
     setCurrentWorkspace({
