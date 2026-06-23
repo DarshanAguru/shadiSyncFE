@@ -110,6 +110,8 @@ export default function DashboardScreen() {
       // Update workspace cover_image_url
       await updateWorkspaceMutation.mutateAsync({
         id: currentWorkspace.id,
+        name: currentWorkspace.name,
+        weddingDate: currentWorkspace.weddingDate,
         coverImageUrl: imageUrl,
       });
 
@@ -337,7 +339,7 @@ export default function DashboardScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           
           {/* TOP HEADER CARD (Deep Maroon, Wedding Theme) */}
           <View style={[styles.weddingHeaderCard, { backgroundColor: '#5D0921' }]}>

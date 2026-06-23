@@ -3,14 +3,16 @@ import { apiRequest } from '../utils/api';
 
 export interface AttachmentItem {
   id: string;
-  document_id: string;
+  document_id: string | null;
+  folder_id?: string | null;
   entity_type: 'EXPENSE' | 'TASK' | 'NOTE' | 'EVENT';
   entity_id: string;
   created_at: string;
-  document_name: string;
-  file_url: string;
-  file_size: number;
-  mime_type: string;
+  document_name?: string;
+  folder_name?: string;
+  file_url?: string;
+  file_size?: number;
+  mime_type?: string;
 }
 
 export interface DocumentItem {
@@ -95,7 +97,8 @@ export function useCreateAttachment() {
     { attachment: AttachmentItem },
     Error,
     {
-      documentId: string;
+      documentId?: string;
+      folderId?: string;
       entityType: 'EXPENSE' | 'TASK' | 'NOTE' | 'EVENT';
       entityId: string;
     }

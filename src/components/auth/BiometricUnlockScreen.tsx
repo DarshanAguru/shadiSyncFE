@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { ThemedText } from '../themed-text';
 import { ThemedView } from '../themed-view';
 import { useTheme } from '@/hooks/use-theme';
@@ -17,8 +18,14 @@ import { useAuthStore } from '@/stores/authStore';
 
 export default function BiometricUnlockScreen() {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const { setLocked, clearAuth, user, isBiometricsEnabled, setBiometricsEnabled } = useAuthStore();
   
+  const handleLogout = () => {
+    queryClient.clear();
+    clearAuth();
+  };
+
   const [isSupported, setIsSupported] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -118,7 +125,7 @@ export default function BiometricUnlockScreen() {
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.logoutBtn, { borderColor: theme.textSecondary }]}
-            onPress={() => clearAuth()}
+            onPress={handleLogout}
           >
             <ThemedText style={{ color: theme.textSecondary, fontWeight: 'bold' }}>
               Switch Account / Log Out

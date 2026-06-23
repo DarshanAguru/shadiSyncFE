@@ -91,6 +91,8 @@ export default function ExpensesScreen() {
 
   // List filters
   const [selectedFilterTab, setSelectedFilterTab] = useState<'All' | 'Unbilled' | 'By Category' | 'By Member'>('All');
+  const [dateFilter, setDateFilter] = useState<'month' | 'day' | 'all'>('month');
+  const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -237,15 +239,44 @@ export default function ExpensesScreen() {
   // Load calculations
   const budget = budgetData?.budget;
   const allocated = budget ? Number(budget.allocated) : 2500000;
-  const spent = budget ? Number(budget.spent) : 1435000;
-  const remaining = allocated - spent;
-
   const rawExpenses = expensesData?.expenses || [];
   const events = eventsData?.events || [];
   const categories = categoriesData?.categories || [];
 
+  // Date filter logic
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const todayStr = now.toISOString().split('T')[0];
+
+  const spent = rawExpenses
+    .filter((e) => {
+      if (!e.expense_date) return false;
+      if (dateFilter === 'month') {
+        const d = new Date(e.expense_date);
+        return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+      }
+      if (dateFilter === 'day') {
+        return e.expense_date.split('T')[0] === todayStr;
+      }
+      return true;
+    })
+    .reduce((sum, exp) => sum + Number(exp.amount), 0);
+
+  const remaining = allocated - spent;
+
   // Filter logic
-  let filteredExpenses = [...rawExpenses];
+  let filteredExpenses = rawExpenses.filter((e) => {
+    if (!e.expense_date) return false;
+    if (dateFilter === 'month') {
+      const d = new Date(e.expense_date);
+      return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+    }
+    if (dateFilter === 'day') {
+      return e.expense_date.split('T')[0] === todayStr;
+    }
+    return true;
+  });
 
   // 1. Search Query Filter (by description, category, event, or member name)
   if (searchQuery.trim().length > 0) {
@@ -306,7 +337,7 @@ export default function ExpensesScreen() {
               </TouchableOpacity>
             </ThemedView>
           ) : mode === 'DETAIL' && selectedExpense ? (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               <ThemedText type="smallBold" style={styles.formTitle}>Expense Details</ThemedText>
               <ThemedView type="backgroundElement" style={[styles.detailCard, { borderColor: theme.border }]}>
                 <ThemedView style={styles.detailRow}>
@@ -381,13 +412,13 @@ export default function ExpensesScreen() {
               <AttachmentSection
                 entityType="EXPENSE"
                 entityId={selectedExpense.id}
-                readOnly={!canEditExpense}
+                readOnly={!hasPermission(currentWorkspace?.role, 'Expenses', 'edit')}
                 eventTitle={selectedExpense.event_title || undefined}
                 categoryName={selectedExpense.category_name || undefined}
               />
             </ScrollView>
           ) : mode === 'CREATE' || mode === 'EDIT' ? (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               <ThemedText type="smallBold" style={styles.formTitle}>
                 {mode === 'EDIT' ? 'Edit Expense' : 'Record Expense'}
               </ThemedText>
@@ -577,11 +608,11 @@ export default function ExpensesScreen() {
               </ThemedView>
             </ScrollView>
           ) : (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               
               {/* HEADER BAR (Hamburger, centered Title, Search/Filter icons) */}
               <View style={styles.appHeaderRow}>
-                <TouchableOpacity onPress={() => setCurrentWorkspace(null)} style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                <TouchableOpacity onPress={() => { router.replace('/'); }} style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
                   <Ionicons name="menu-outline" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <ThemedText type="title" style={[styles.screenCenterTitle, { color: theme.text }]}>Expenses</ThemedText>
@@ -620,14 +651,42 @@ export default function ExpensesScreen() {
               </View>
 
               {/* TOTAL SPENT SUMMARY CARD */}
-              <ThemedView type="backgroundElement" style={[styles.totalSpentCard, { borderColor: theme.border }]}>
+              <ThemedView type="backgroundElement" style={[styles.totalSpentCard, { borderColor: theme.border, zIndex: 10, position: 'relative' }]}>
                 <View style={styles.spentLabelRow}>
                   <ThemedText type="small" style={[styles.spentSubTitle, { color: theme.textSecondary }]}>Total Spent</ThemedText>
-                  <View style={[styles.durationSelector, { backgroundColor: theme.backgroundSelected }]}>
-                    <ThemedText style={[styles.durationText, { color: theme.text }]}>This Month</ThemedText>
-                    <Ionicons name="chevron-down" size={12} color={theme.text} />
-                  </View>
+                  <TouchableOpacity
+                    style={[styles.durationSelector, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => setShowDurationPicker(!showDurationPicker)}
+                  >
+                    <ThemedText style={[styles.durationText, { color: theme.text }]}>
+                      {dateFilter === 'month' ? 'This Month' : dateFilter === 'day' ? 'This Day' : 'All Time'}
+                    </ThemedText>
+                    <Ionicons name={showDurationPicker ? "chevron-up" : "chevron-down"} size={12} color={theme.text} />
+                  </TouchableOpacity>
                 </View>
+
+                {showDurationPicker && (
+                  <View style={[styles.durationDropdown, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                    {(['month', 'day', 'all'] as const).map((opt) => (
+                      <TouchableOpacity
+                        key={opt}
+                        style={[
+                          styles.durationDropdownOption,
+                          dateFilter === opt && { backgroundColor: theme.backgroundSelected }
+                        ]}
+                        onPress={() => {
+                          setDateFilter(opt);
+                          setShowDurationPicker(false);
+                        }}
+                      >
+                        <ThemedText style={[styles.durationOptionText, { color: theme.text }]}>
+                          {opt === 'month' ? 'This Month' : opt === 'day' ? 'This Day' : 'All Time'}
+                        </ThemedText>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+
                 <ThemedText style={[styles.totalSpentValue, { color: theme.text }]}>₹{spent.toLocaleString('en-IN')}</ThemedText>
 
                 {/* PROGRESS BAR */}
@@ -707,9 +766,9 @@ export default function ExpensesScreen() {
                       disabled={updateBudgetMutation.isPending}
                     >
                       {updateBudgetMutation.isPending ? (
-                        <ActivityIndicator color="#FFFFFF" size="small" />
+                        <ActivityIndicator color={theme.background} size="small" />
                       ) : (
-                        <ThemedText style={{ color: '#FFFFFF', fontWeight: 'bold', fontSize: 13 }}>
+                        <ThemedText style={{ color: theme.background, fontWeight: 'bold', fontSize: 13 }}>
                           Save
                         </ThemedText>
                       )}
@@ -891,7 +950,7 @@ export default function ExpensesScreen() {
               {canCreateExpense && (
                 <TouchableOpacity
                   style={[styles.logExpenseFullButton, { backgroundColor: theme.text }]}
-                  onPress={() => setMode('CREATE')}
+                  onPress={() => { resetExpenseForm(); setMode('CREATE'); }}
                 >
                   <ThemedText style={[styles.logExpenseText, { color: theme.background }]}>+ Log New Expense</ThemedText>
                 </TouchableOpacity>
@@ -960,7 +1019,7 @@ export default function ExpensesScreen() {
           {mode === 'LIST' && canCreateExpense && (
             <TouchableOpacity
               style={[styles.fabButton, { backgroundColor: '#E91E63' }]}
-              onPress={() => setMode('CREATE')}
+              onPress={() => { resetExpenseForm(); setMode('CREATE'); }}
               activeOpacity={0.8}
             >
               <Ionicons name="add" size={28} color="#FFFFFF" />
@@ -1349,6 +1408,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  durationDropdown: {
+    position: 'absolute',
+    top: 48,
+    right: Spacing.four,
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 4,
+    zIndex: 1000,
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  durationDropdownOption: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  durationOptionText: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   fabButton: {
     position: 'absolute',

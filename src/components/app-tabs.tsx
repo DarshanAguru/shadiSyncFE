@@ -5,9 +5,30 @@ import { useColorScheme, Platform, StyleSheet, View, TouchableOpacity } from 're
 import { Colors } from '@/constants/theme';
 import { ThemedText } from './themed-text';
 
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+
 export default function AppTabs() {
   const scheme = useColorScheme();
   const colors = Colors[scheme === 'unspecified' || !scheme ? 'light' : scheme];
+  const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
+
+  const showTasksTab = (() => {
+    if (!currentWorkspace) return true;
+    const permissions = currentWorkspace.permissions;
+    if (permissions && permissions['Tasks']) {
+      return permissions['Tasks'].view !== false;
+    }
+    return true;
+  })();
+
+  const showExpensesTab = (() => {
+    if (!currentWorkspace) return true;
+    const permissions = currentWorkspace.permissions;
+    if (permissions && permissions['Expenses']) {
+      return permissions['Expenses'].view !== false;
+    }
+    return true;
+  })();
 
   return (
     <Tabs
@@ -44,6 +65,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="tasks"
         options={{
+          href: showTasksTab ? undefined : null,
           title: 'Tasks',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
@@ -58,6 +80,7 @@ export default function AppTabs() {
       <Tabs.Screen
         name="expenses"
         options={{
+          href: showExpensesTab ? undefined : null,
           title: 'Expenses',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
@@ -87,7 +110,6 @@ export default function AppTabs() {
         name="documents"
         options={{
           href: null,
-          tabBarButton: () => null,
         }}
       />
 
@@ -95,7 +117,6 @@ export default function AppTabs() {
         name="create-expense"
         options={{
           href: null,
-          tabBarButton: () => null,
         }}
       />
     </Tabs>

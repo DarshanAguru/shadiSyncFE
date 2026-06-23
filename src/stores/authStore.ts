@@ -29,7 +29,17 @@ export const useAuthStore = create<AuthState>()(
       isBiometricsEnabled: false,
       isLocked: true, // Always start locked if persisted token is found
       setAuth: (token, user) => set({ token, user, isAuthenticated: true, isLocked: false }),
-      clearAuth: () => set({ token: null, user: null, isAuthenticated: false, isLocked: true }),
+      clearAuth: () => {
+        try {
+          // Reset workspace store to prevent leaking state to other users
+          const { useWorkspaceStore } = require('./workspaceStore');
+          useWorkspaceStore.getState().setCurrentWorkspace(null);
+          useWorkspaceStore.getState().setWorkspaces([]);
+        } catch (e) {
+          console.error('Failed to clear workspace store:', e);
+        }
+        set({ token: null, user: null, isAuthenticated: false, isLocked: true });
+      },
       setBiometricsEnabled: (enabled) => set({ isBiometricsEnabled: enabled }),
       setLocked: (locked) => set({ isLocked: locked }),
     }),

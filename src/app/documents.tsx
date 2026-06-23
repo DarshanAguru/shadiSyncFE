@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useToastStore } from '@/stores/toastStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useLocalSearchParams } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
@@ -60,6 +61,8 @@ import {
   useCreateFolder,
   useDocumentsList,
   useUploadDocument,
+  useDeleteDocument,
+  useDeleteFolder,
   FolderItem,
 } from '@/hooks/useDocuments';
 
@@ -71,6 +74,15 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
   // Browse state: 'root' or folder UUID
   const [currentFolderId, setCurrentFolderId] = useState<string>('root');
   const [currentFolderName, setCurrentFolderName] = useState<string>('');
+
+  const { folderId: routeFolderId, folderName: routeFolderName } = useLocalSearchParams<{ folderId?: string; folderName?: string }>();
+
+  useEffect(() => {
+    if (routeFolderId) {
+      setCurrentFolderId(routeFolderId);
+      setCurrentFolderName(routeFolderName || 'Folder');
+    }
+  }, [routeFolderId, routeFolderName]);
 
   // UI state
   const [showFolderForm, setShowFolderForm] = useState(false);
@@ -87,6 +99,8 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
   // Mutations
   const createFolderMutation = useCreateFolder();
   const uploadDocMutation = useUploadDocument();
+  const deleteDocMutation = useDeleteDocument();
+  const deleteFolderMutation = useDeleteFolder();
 
   // Create folder handler
   const handleCreateFolder = async () => {
@@ -199,6 +213,7 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
   });
 
   const canCreate = hasPermission(currentWorkspace?.role, 'Documents', 'create');
+  const canDelete = hasPermission(currentWorkspace?.role, 'Documents', 'delete');
 
   const ContainerView = nested ? View : SafeAreaView;
 
@@ -206,7 +221,7 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
     <ThemedView style={styles.container}>
       <ContainerView style={styles.safeArea}>
         <WorkspaceGuard currentWorkspace={currentWorkspace}>
-          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
             
             {/* Header section */}
             {!nested ? (
@@ -352,9 +367,28 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                     {filteredFolders.map((folder) => (
                       <TouchableOpacity
                         key={folder.id}
-                        style={[styles.folderCard, { backgroundColor: theme.backgroundElement }]}
+                        style={[styles.folderCard, { backgroundColor: theme.backgroundElement, position: 'relative' }]}
                         onPress={() => handleFolderClick(folder)}
                       >
+                        {canDelete && (
+                          <TouchableOpacity
+                            style={{ position: 'absolute', top: 6, right: 6, zIndex: 10, padding: 4 }}
+                            onPress={async (e) => {
+                              e.stopPropagation();
+                              try {
+                                await deleteFolderMutation.mutateAsync({
+                                  id: folder.id,
+                                  workspaceId: currentWorkspace?.id || '',
+                                });
+                                showToast('Success', 'Folder deleted successfully', 'success');
+                              } catch (err: any) {
+                                showToast('Error', err.message || 'Failed to delete folder', 'error');
+                              }
+                            }}
+                          >
+                            <Ionicons name="trash-outline" size={16} color="#ff3b30" />
+                          </TouchableOpacity>
+                        )}
                         <Ionicons name="folder" size={32} color="#E91E63" style={{ marginBottom: 4 }} />
                         <ThemedText type="smallBold" style={styles.folderCardName} numberOfLines={2}>
                           {folder.name}
@@ -409,19 +443,40 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                         </ThemedView>
                       </View>
 
-                      <TouchableOpacity
-                        style={[styles.viewBtn, { borderColor: theme.border }]}
-                        onPress={async () => {
-                          const resolved = resolveFileUrl(doc.file_url);
-                          try {
-                            await WebBrowser.openBrowserAsync(resolved);
-                          } catch (err) {
-                            showToast('Error', 'Could not open document link', 'error');
-                          }
-                        }}
-                      >
-                        <ThemedText style={{ fontSize: 11, color: theme.text }}>View</ThemedText>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'center' }}>
+                        <TouchableOpacity
+                          style={[styles.viewBtn, { borderColor: theme.border }]}
+                          onPress={async () => {
+                            const resolved = resolveFileUrl(doc.file_url);
+                            try {
+                              await WebBrowser.openBrowserAsync(resolved);
+                            } catch (err) {
+                              showToast('Error', 'Could not open document link', 'error');
+                            }
+                          }}
+                        >
+                          <ThemedText style={{ fontSize: 11, color: theme.text }}>View</ThemedText>
+                        </TouchableOpacity>
+
+                        {canDelete && (
+                          <TouchableOpacity
+                            style={[styles.viewBtn, { borderColor: '#ff3b30' }]}
+                            onPress={async () => {
+                              try {
+                                  await deleteDocMutation.mutateAsync({
+                                    id: doc.id,
+                                    workspaceId: currentWorkspace?.id || '',
+                                  });
+                                showToast('Success', 'Document deleted successfully', 'success');
+                              } catch (err: any) {
+                                showToast('Error', err.message || 'Failed to delete document', 'error');
+                              }
+                            }}
+                          >
+                            <ThemedText style={{ fontSize: 11, color: '#ff3b30', fontWeight: 'bold' }}>Delete</ThemedText>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </ThemedView>
                   ))}
                 </ThemedView>

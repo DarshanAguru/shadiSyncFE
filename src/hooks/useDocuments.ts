@@ -90,3 +90,50 @@ export function useUploadDocument() {
     },
   });
 }
+
+/**
+ * Hook to delete a document.
+ */
+export function useDeleteDocument() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { message: string; id: string },
+    Error,
+    { id: string; workspaceId: string }
+  >({
+    mutationFn: ({ id, workspaceId }) =>
+      apiRequest<{ message: string; id: string }>(`/documents/${id}?workspaceId=${workspaceId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['documentsList', variables.workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['workspaceDocuments', variables.workspaceId] });
+    },
+  });
+}
+
+/**
+ * Hook to delete a folder.
+ */
+export function useDeleteFolder() {
+  const queryClient = useQueryClient();
+
+  return useMutation<
+    { message: string; id: string },
+    Error,
+    { id: string; workspaceId: string }
+  >({
+    mutationFn: ({ id, workspaceId }) =>
+      apiRequest<{ message: string; id: string }>(`/folders/${id}?workspaceId=${workspaceId}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['folders', variables.workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['documentsList', variables.workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['workspaceDocuments', variables.workspaceId] });
+    },
+  });
+}
+
+

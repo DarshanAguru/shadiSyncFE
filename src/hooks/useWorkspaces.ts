@@ -10,6 +10,8 @@ export interface Workspace {
   role: 'OWNER' | 'EDITOR' | 'VIEWER';
   created_at: string;
   cover_image_url?: string | null;
+  permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> | null;
+  allocated_budget?: string | number | null;
 }
 
 interface FetchWorkspacesResponse {
@@ -85,5 +87,37 @@ export function useArchiveWorkspace() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['workspaces'] });
     },
+  });
+}
+
+export interface WorkspaceMember {
+  id: string;
+  name: string;
+  phone: string;
+  role: 'OWNER' | 'EDITOR' | 'VIEWER';
+  permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> | null;
+  allocated_budget?: string | number | null;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  phone_number: string;
+  role: 'EDITOR' | 'VIEWER';
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED';
+  permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> | null;
+  allocated_budget?: string | number | null;
+  created_at: string;
+}
+
+interface FetchMembersResponse {
+  members: WorkspaceMember[];
+  invitations: WorkspaceInvitation[];
+}
+
+export function useWorkspaceMembers(workspaceId: string | undefined) {
+  return useQuery<FetchMembersResponse, Error>({
+    queryKey: ['workspaceMembers', workspaceId],
+    queryFn: () => apiRequest<FetchMembersResponse>(`/workspaces/${workspaceId}/members`),
+    enabled: !!workspaceId,
   });
 }

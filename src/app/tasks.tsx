@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   View,
   Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -245,9 +246,10 @@ export default function TasksScreen() {
 
   // Filter Tasks list
   let filteredTasks = [...tasks];
+  console.log('[DEBUG TASKS] Tab:', selectedFilterTab, 'User:', currentUser?.id, 'All Tasks:', tasks.map(t => ({ id: t.id, title: t.title, assigned_to: t.assigned_to, created_by: t.created_by, status: t.status })));
   if (selectedFilterTab === 'My Tasks') {
     filteredTasks = tasks.filter(
-      (t) => t.assigned_to === currentUser?.id
+      (t) => t.assigned_to === currentUser?.id || t.created_by === currentUser?.id
     );
   } else if (selectedFilterTab === 'Completed') {
     filteredTasks = tasks.filter((t) => t.status === 'Completed');
@@ -256,11 +258,16 @@ export default function TasksScreen() {
   if (selectedEventId !== 'all') {
     filteredTasks = filteredTasks.filter((t) => t.event_id === selectedEventId);
   }
+  console.log('[DEBUG TASKS] Filtered Tasks:', filteredTasks.map(t => t.title));
 
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <WorkspaceGuard currentWorkspace={currentWorkspace}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <WorkspaceGuard currentWorkspace={currentWorkspace}>
           {isLoading ? (
             <ThemedView style={styles.center}>
               <ActivityIndicator size="large" color="#5D0921" />
@@ -273,7 +280,7 @@ export default function TasksScreen() {
               </TouchableOpacity>
             </ThemedView>
           ) : mode === 'CREATE' || mode === 'EDIT' ? (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               <ThemedText type="smallBold" style={styles.formTitle}>
                 {mode === 'EDIT' ? (isSelectedTaskEditable ? 'Edit Task' : 'Task Details') : 'Create Task'}
               </ThemedText>
@@ -551,17 +558,17 @@ export default function TasksScreen() {
               </ThemedView>
             </ScrollView>
           ) : (
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               
               {/* HEADER BAR (Hamburger, centered Title, Add/Filter icons) */}
               <View style={styles.appHeaderRow}>
-                <TouchableOpacity onPress={() => setCurrentWorkspace(null)} style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                <TouchableOpacity onPress={() => { router.replace('/'); }} style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
                   <Ionicons name="menu-outline" size={24} color={theme.text} />
                 </TouchableOpacity>
                 <ThemedText type="title" style={[styles.screenCenterTitle, { color: theme.text }]}>Tasks</ThemedText>
                 <View style={styles.headerRightActions}>
                   {canCreate && (
-                    <TouchableOpacity style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]} onPress={() => setMode('CREATE')}>
+                    <TouchableOpacity style={[styles.headerIconBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]} onPress={() => { resetForm(); setMode('CREATE'); }}>
                       <Ionicons name="add" size={22} color={theme.text} />
                     </TouchableOpacity>
                   )}
@@ -663,7 +670,7 @@ export default function TasksScreen() {
               {canCreate && (
                 <TouchableOpacity
                   style={[styles.logTaskFullButton, { backgroundColor: theme.text }]}
-                  onPress={() => setMode('CREATE')}
+                  onPress={() => { resetForm(); setMode('CREATE'); }}
                 >
                   <ThemedText style={[styles.logTaskText, { color: theme.background }]}>+ Add Custom Task</ThemedText>
                 </TouchableOpacity>
@@ -802,8 +809,9 @@ export default function TasksScreen() {
             </TouchableOpacity>
           )}
         </WorkspaceGuard>
-      </SafeAreaView>
-    </ThemedView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  </ThemedView>
   );
 }
 
@@ -1022,7 +1030,7 @@ const styles = StyleSheet.create({
   rightSideColumn: {
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: '100%',
+    alignSelf: 'stretch',
     minHeight: 52,
     gap: Spacing.one,
   },

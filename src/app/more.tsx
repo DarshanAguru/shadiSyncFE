@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useToastStore } from '@/stores/toastStore';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
-import { useUpdateWorkspace, useArchiveWorkspace } from '@/hooks/useWorkspaces';
+import { useUpdateWorkspace, useArchiveWorkspace, useWorkspaceMembers } from '@/hooks/useWorkspaces';
 import { useSendInvitation } from '@/hooks/useInvitations';
 import { useTheme } from '@/hooks/use-theme';
 
@@ -24,7 +26,12 @@ type SettingsTab = 'WORKSPACE' | 'EVENTS' | 'CATEGORIES' | 'NOTES' | 'DOCUMENTS'
 
 export default function MoreScreen() {
   const theme = useTheme();
+  const queryClient = useQueryClient();
   const logout = useAuthStore((state) => state.clearAuth);
+  const handleLogout = () => {
+    queryClient.clear();
+    logout();
+  };
   const user = useAuthStore((state) => state.user);
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const { tab, action } = useLocalSearchParams<{ tab?: SettingsTab; action?: string }>();
@@ -53,6 +60,10 @@ export default function MoreScreen() {
   // Invitation States
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteRole, setInviteRole] = useState<'EDITOR' | 'VIEWER'>('EDITOR');
+  const [selectedModules, setSelectedModules] = useState<string[]>(['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget']);
+  const [allocatedBudget, setAllocatedBudget] = useState('');
+
+  const { data: membersData, isLoading: membersLoading } = useWorkspaceMembers(currentWorkspace?.id);
 
   useEffect(() => {
     if (currentWorkspace) {
@@ -108,10 +119,26 @@ export default function MoreScreen() {
     }
 
     try {
+      const permissions: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> = {};
+      const modules = ['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'];
+      modules.forEach(mod => {
+        const isAllowed = selectedModules.includes(mod);
+        permissions[mod] = {
+          view: isAllowed,
+          create: isAllowed,
+          edit: isAllowed,
+          delete: isAllowed && inviteRole !== 'VIEWER',
+        };
+      });
+
+      const budgetNum = allocatedBudget ? parseFloat(allocatedBudget) : null;
+
       const res = await sendInviteMutation.mutateAsync({
         workspaceId: currentWorkspace.id,
         phoneNumber: invitePhone.trim(),
         role: inviteRole,
+        permissions,
+        allocatedBudget: budgetNum,
       });
 
       if (res.userExists) {
@@ -120,6 +147,8 @@ export default function MoreScreen() {
         showToast('Success', `Pending invitation created! ${invitePhone} is not registered yet, they will see it when they sign up.`, 'success');
       }
       setInvitePhone('');
+      setSelectedModules(['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget']);
+      setAllocatedBudget('');
     } catch (err: any) {
       showToast('Error', err.message || 'Failed to send invitation', 'error');
     }
@@ -131,7 +160,11 @@ export default function MoreScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <ThemedView style={styles.header}>
             <ThemedText type="title">Settings & More</ThemedText>
             <ThemedText type="default" style={styles.subtitle}>
@@ -316,6 +349,55 @@ export default function MoreScreen() {
                       </ThemedView>
                     </ThemedView>
 
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">Budget Limit (Optional)</ThemedText>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
+                        placeholder="e.g. 50000"
+                        placeholderTextColor={theme.textSecondary}
+                        value={allocatedBudget}
+                        onChangeText={setAllocatedBudget}
+                        keyboardType="numeric"
+                      />
+                    </ThemedView>
+
+                    <ThemedView style={styles.inputWrapper}>
+                      <ThemedText type="smallBold">Allowed Sections (Module Access)</ThemedText>
+                      <ThemedView style={styles.checkboxContainer}>
+                        {['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'].map((mod) => {
+                          const isChecked = selectedModules.includes(mod);
+                          return (
+                            <TouchableOpacity
+                              key={mod}
+                              style={[
+                                styles.checkboxBtn,
+                                {
+                                  borderColor: isChecked ? theme.text : theme.border,
+                                  backgroundColor: isChecked ? 'rgba(233, 30, 99, 0.08)' : 'transparent',
+                                },
+                              ]}
+                              onPress={() => {
+                                if (isChecked) {
+                                  setSelectedModules(selectedModules.filter(m => m !== mod));
+                                } else {
+                                  setSelectedModules([...selectedModules, mod]);
+                                }
+                              }}
+                            >
+                              <Ionicons
+                                name={isChecked ? 'checkbox-outline' : 'square-outline'}
+                                size={14}
+                                color={isChecked ? theme.text : theme.textSecondary}
+                              />
+                              <ThemedText style={{ fontSize: 12, color: isChecked ? theme.text : theme.textSecondary }}>
+                                {mod}
+                              </ThemedText>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ThemedView>
+                    </ThemedView>
+
                     <TouchableOpacity
                       style={[styles.button, { backgroundColor: theme.text }]}
                       onPress={handleSendInvite}
@@ -330,6 +412,96 @@ export default function MoreScreen() {
                       )}
                     </TouchableOpacity>
                   </ThemedView>
+                </ThemedView>
+              )}
+
+              {/* Workspace Members & Invitations Section */}
+              {currentWorkspace && (
+                <ThemedView type="backgroundElement" style={styles.card}>
+                  <ThemedText type="smallBold" style={styles.sectionTitle}>Workspace Members & Invites</ThemedText>
+                  
+                  {membersLoading ? (
+                    <ActivityIndicator size="small" color={theme.text} />
+                  ) : (
+                    <ThemedView style={styles.membersSection}>
+                      {/* Current Members */}
+                      {membersData?.members.map((member) => {
+                        // Compute permissions summary
+                        let permText = 'Full Access';
+                        if (member.role !== 'OWNER' && member.permissions) {
+                          const denied: string[] = [];
+                          ['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'].forEach(m => {
+                            if (member.permissions?.[m]?.view === false) {
+                              denied.push(m);
+                            }
+                          });
+                          if (denied.length > 0) {
+                            permText = `Restricted: ${denied.join(', ')}`;
+                          }
+                        }
+
+                        return (
+                          <ThemedView key={member.id} style={[styles.memberItem, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                            <ThemedView style={styles.memberHeader}>
+                              <ThemedText type="smallBold">{member.name}</ThemedText>
+                              <ThemedView style={[styles.badge, { backgroundColor: member.role === 'OWNER' ? 'rgba(233, 30, 99, 0.15)' : 'rgba(0, 0, 0, 0.05)' }]}>
+                                <ThemedText style={[styles.badgeText, { color: member.role === 'OWNER' ? '#E91E63' : theme.text }]}>
+                                  {member.role}
+                                </ThemedText>
+                              </ThemedView>
+                            </ThemedView>
+                            <ThemedText type="small" style={{ opacity: 0.6 }}>Phone: {member.phone}</ThemedText>
+                            <ThemedText type="small" style={{ opacity: 0.6 }}>
+                              Budget Limit: {member.allocated_budget ? `₹${Number(member.allocated_budget).toLocaleString('en-IN')}` : 'Unlimited'}
+                            </ThemedText>
+                            <ThemedText style={[styles.permissionsSummary, { color: permText.startsWith('Restricted') ? '#ff3b30' : theme.textSecondary }]}>
+                              Permissions: {permText}
+                            </ThemedText>
+                          </ThemedView>
+                        );
+                      })}
+
+                      {/* Pending Invites */}
+                      {membersData?.invitations && membersData.invitations.length > 0 && (
+                        <>
+                          <ThemedText type="smallBold" style={[styles.sectionTitle, { marginTop: Spacing.two }]}>Pending Invitations</ThemedText>
+                          {membersData.invitations.map((invite) => {
+                            let permText = 'Full Access';
+                            if (invite.permissions) {
+                              const denied: string[] = [];
+                              ['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'].forEach(m => {
+                                if (invite.permissions?.[m]?.view === false) {
+                                  denied.push(m);
+                                }
+                              });
+                              if (denied.length > 0) {
+                                permText = `Restricted: ${denied.join(', ')}`;
+                              }
+                            }
+
+                            return (
+                              <ThemedView key={invite.id} style={[styles.memberItem, { backgroundColor: theme.background, borderColor: 'rgba(233, 30, 99, 0.2)' }]}>
+                                <ThemedView style={styles.memberHeader}>
+                                  <ThemedText type="smallBold">{invite.phone_number}</ThemedText>
+                                  <ThemedView style={[styles.badge, { backgroundColor: 'rgba(233, 30, 99, 0.08)' }]}>
+                                    <ThemedText style={[styles.badgeText, { color: '#E91E63' }]}>
+                                      {invite.role} (PENDING)
+                                    </ThemedText>
+                                  </ThemedView>
+                                </ThemedView>
+                                <ThemedText type="small" style={{ opacity: 0.6 }}>
+                                  Budget Limit: {invite.allocated_budget ? `₹${Number(invite.allocated_budget).toLocaleString('en-IN')}` : 'Unlimited'}
+                                </ThemedText>
+                                <ThemedText style={[styles.permissionsSummary, { color: permText.startsWith('Restricted') ? '#ff3b30' : theme.textSecondary }]}>
+                                  Permissions: {permText}
+                                </ThemedText>
+                              </ThemedView>
+                            );
+                          })}
+                        </>
+                      )}
+                    </ThemedView>
+                  )}
                 </ThemedView>
               )}
 
@@ -433,7 +605,7 @@ export default function MoreScreen() {
                 )}
                 <TouchableOpacity
                   style={styles.logoutBtn}
-                  onPress={logout}
+                  onPress={handleLogout}
                 >
                   <ThemedText style={styles.logoutText}>Log Out</ThemedText>
                 </TouchableOpacity>
@@ -472,6 +644,7 @@ export default function MoreScreen() {
 
           {activeTab === 'DOCUMENTS' && <DocumentsScreen nested={true} />}
         </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </ThemedView>
   );
@@ -622,5 +795,48 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexDirection: 'row',
     gap: Spacing.one,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  checkboxBtn: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  membersSection: {
+    gap: Spacing.two,
+  },
+  memberItem: {
+    padding: Spacing.three,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: Spacing.one,
+  },
+  memberHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badge: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  permissionsSummary: {
+    fontSize: 11,
+    opacity: 0.6,
+    marginTop: 2,
   },
 });

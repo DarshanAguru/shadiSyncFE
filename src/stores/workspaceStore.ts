@@ -6,6 +6,8 @@ export interface Workspace {
   weddingDate: string;
   role: 'OWNER' | 'EDITOR' | 'VIEWER';
   cover_image_url?: string | null;
+  permissions?: Record<string, { view: boolean; create: boolean; edit: boolean; delete: boolean }> | null;
+  allocated_budget?: string | number | null;
 }
 
 interface WorkspaceState {

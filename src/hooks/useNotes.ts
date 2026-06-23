@@ -64,10 +64,10 @@ export function useUpdateNote() {
     Error,
     { id: string; workspaceId: string; title: string; content?: string; isPinned?: boolean }
   >({
-    mutationFn: ({ id, ...variables }) =>
-      apiRequest<{ note: NoteItem }>(`/notes/${id}`, {
+    mutationFn: ({ id, workspaceId, ...variables }) =>
+      apiRequest<{ note: NoteItem }>(`/notes/${id}?workspaceId=${workspaceId}`, {
         method: 'PUT',
-        body: JSON.stringify(variables),
+        body: JSON.stringify({ workspaceId, ...variables }),
       }),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['notes', data.note.workspace_id] });

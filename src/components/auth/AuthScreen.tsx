@@ -94,6 +94,11 @@ export default function AuthScreen() {
             resizeMode="cover"
           />
           <ThemedView style={styles.brandContainer}>
+            <Image
+              source={require('@/assets/images/shadisync_logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <ThemedText type="title" style={styles.brandTitle}>ShadiSync</ThemedText>
             <ThemedText type="default" style={styles.brandSubtitle}>
               {isLogin ? 'Collaborative Wedding Workspace' : 'Create Your Workspace Account'}
@@ -233,6 +238,12 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 200,
     borderRadius: 12,
+    marginBottom: Spacing.two,
+  },
+  logoImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
     marginBottom: Spacing.two,
   },
   brandContainer: {

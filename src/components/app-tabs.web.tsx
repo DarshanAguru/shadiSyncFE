@@ -15,7 +15,29 @@ import { ThemedView } from './themed-view';
 
 import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
 
+import { useWorkspaceStore } from '@/stores/workspaceStore';
+
 export default function AppTabs() {
+  const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
+
+  const showTasksTab = (() => {
+    if (!currentWorkspace) return true;
+    const permissions = currentWorkspace.permissions;
+    if (permissions && permissions['Tasks']) {
+      return permissions['Tasks'].view !== false;
+    }
+    return true;
+  })();
+
+  const showExpensesTab = (() => {
+    if (!currentWorkspace) return true;
+    const permissions = currentWorkspace.permissions;
+    if (permissions && permissions['Expenses']) {
+      return permissions['Expenses'].view !== false;
+    }
+    return true;
+  })();
+
   return (
     <Tabs>
       <TabSlot style={{ height: '100%' }} />
@@ -24,12 +46,16 @@ export default function AppTabs() {
           <TabTrigger name="index" href="/" asChild>
             <TabButton>Dashboard</TabButton>
           </TabTrigger>
-          <TabTrigger name="tasks" href="/tasks" asChild>
-            <TabButton>Tasks</TabButton>
-          </TabTrigger>
-          <TabTrigger name="expenses" href="/expenses" asChild>
-            <TabButton>Expenses</TabButton>
-          </TabTrigger>
+          {showTasksTab && (
+            <TabTrigger name="tasks" href="/tasks" asChild>
+              <TabButton>Tasks</TabButton>
+            </TabTrigger>
+          )}
+          {showExpensesTab && (
+            <TabTrigger name="expenses" href="/expenses" asChild>
+              <TabButton>Expenses</TabButton>
+            </TabTrigger>
+          )}
           <TabTrigger name="more" href="/more" asChild>
             <TabButton>More</TabButton>
           </TabTrigger>

@@ -38,6 +38,9 @@ export default function WorkspaceSwitcher() {
       name: ws.name,
       weddingDate: ws.wedding_date,
       role: ws.role,
+      cover_image_url: ws.cover_image_url,
+      permissions: ws.permissions,
+      allocated_budget: ws.allocated_budget,
     });
   };
 

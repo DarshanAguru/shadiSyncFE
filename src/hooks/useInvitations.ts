@@ -28,15 +28,16 @@ export function useSendInvitation() {
   return useMutation<
     { message: string; invite: any; userExists: boolean },
     Error,
-    { workspaceId: string; phoneNumber: string; role: 'EDITOR' | 'VIEWER' }
+    { workspaceId: string; phoneNumber: string; role: 'EDITOR' | 'VIEWER'; permissions?: any; allocatedBudget?: number | null }
   >({
     mutationFn: (variables) =>
       apiRequest<{ message: string; invite: any; userExists: boolean }>('/invitations/send', {
         method: 'POST',
         body: JSON.stringify(variables),
       }),
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
+      queryClient.invalidateQueries({ queryKey: ['workspaceMembers', variables.workspaceId] });
     },
   });
 }
