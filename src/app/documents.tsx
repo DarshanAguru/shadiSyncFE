@@ -9,6 +9,7 @@ import {
   View,
   RefreshControl,
   Linking,
+  Alert,
 } from 'react-native';
 import { useToastStore } from '@/stores/toastStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -473,54 +474,76 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                         </ThemedView>
                       </View>
 
-                      <View style={{ flexDirection: 'row', gap: Spacing.two, alignItems: 'center' }}>
-                        <TouchableOpacity
-                          style={[styles.viewBtn, { borderColor: theme.border }]}
-                          onPress={async () => {
-                            const resolved = resolveFileUrl(doc.file_url);
-                            try {
-                              await WebBrowser.openBrowserAsync(resolved);
-                            } catch (err) {
-                              showToast('Error', 'Could not open document link', 'error');
-                            }
-                          }}
-                        >
-                          <ThemedText style={{ fontSize: 11, color: theme.text }}>View</ThemedText>
-                        </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ padding: 8 }}
+                        onPress={() => {
+                          const buttons: any[] = [
+                            {
+                              text: 'View',
+                              onPress: () => {
+                                const resolved = resolveFileUrl(doc.file_url);
+                                WebBrowser.openBrowserAsync(resolved).catch(() => {
+                                  showToast('Error', 'Could not open document link', 'error');
+                                });
+                              },
+                            },
+                            {
+                              text: 'Download',
+                              onPress: () => {
+                                const resolved = resolveFileUrl(doc.file_url);
+                                Linking.openURL(resolved).catch(() => {
+                                  showToast('Error', 'Could not start download', 'error');
+                                });
+                              },
+                            },
+                          ];
 
-                        <TouchableOpacity
-                          style={[styles.viewBtn, { borderColor: theme.border }]}
-                          onPress={async () => {
-                            const resolved = resolveFileUrl(doc.file_url);
-                            try {
-                              await Linking.openURL(resolved);
-                            } catch (err) {
-                              showToast('Error', 'Could not start download', 'error');
-                            }
-                          }}
-                        >
-                          <ThemedText style={{ fontSize: 11, color: theme.text }}>Download</ThemedText>
-                        </TouchableOpacity>
+                          if (canDelete) {
+                            buttons.push({
+                              text: 'Delete',
+                              style: 'destructive',
+                              onPress: () => {
+                                Alert.alert(
+                                  'Confirm Delete',
+                                  'Are you sure you want to delete this document?',
+                                  [
+                                    { text: 'Cancel', style: 'cancel' },
+                                    {
+                                      text: 'Delete',
+                                      style: 'destructive',
+                                      onPress: () => {
+                                        deleteDocMutation.mutateAsync({
+                                          id: doc.id,
+                                          workspaceId: currentWorkspace?.id || '',
+                                        }).then(() => {
+                                          showToast('Success', 'Document deleted successfully', 'success');
+                                        }).catch((err: any) => {
+                                          showToast('Error', err.message || 'Failed to delete document', 'error');
+                                        });
+                                      },
+                                    },
+                                  ]
+                                );
+                              },
+                            });
+                          }
 
-                        {canDelete && (
-                          <TouchableOpacity
-                            style={[styles.viewBtn, { borderColor: '#ff3b30' }]}
-                            onPress={async () => {
-                              try {
-                                  await deleteDocMutation.mutateAsync({
-                                    id: doc.id,
-                                    workspaceId: currentWorkspace?.id || '',
-                                  });
-                                showToast('Success', 'Document deleted successfully', 'success');
-                              } catch (err: any) {
-                                showToast('Error', err.message || 'Failed to delete document', 'error');
-                              }
-                            }}
-                          >
-                            <ThemedText style={{ fontSize: 11, color: '#ff3b30', fontWeight: 'bold' }}>Delete</ThemedText>
-                          </TouchableOpacity>
-                        )}
-                      </View>
+                          buttons.push({
+                            text: 'Cancel',
+                            style: 'cancel',
+                            onPress: () => {},
+                          });
+
+                          Alert.alert(
+                            'Document Actions',
+                            `Options for ${doc.name.includes('_') && !isNaN(Number(doc.name.split('_')[0])) ? doc.name.slice(doc.name.indexOf('_') + 1) : doc.name}`,
+                            buttons,
+                            { cancelable: true }
+                          );
+                        }}
+                      >
+                        <Ionicons name="ellipsis-vertical" size={20} color={theme.text} />
+                      </TouchableOpacity>
                     </ThemedView>
                   ))}
                 </ThemedView>
