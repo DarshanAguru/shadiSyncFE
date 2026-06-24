@@ -63,5 +63,5 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = 100;
+export const BottomTabInset = 64;
 export const MaxContentWidth = 800;

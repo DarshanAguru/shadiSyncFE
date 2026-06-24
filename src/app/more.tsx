@@ -669,6 +669,120 @@ export default function MoreScreen() {
                     </ThemedView>
                   </Modal>
 
+                  {/* Invite Member Card */}
+                  {isOwner && (
+                    <ThemedView type="backgroundElement" style={styles.card}>
+                      <ThemedText type="smallBold" style={styles.sectionTitle}>Invite a Member</ThemedText>
+
+                      <ThemedView style={styles.inputWrapper}>
+                        <ThemedText type="smallBold">Phone Number</ThemedText>
+                        <TextInput
+                          style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
+                          placeholder="e.g. +919876543210"
+                          placeholderTextColor={theme.textSecondary}
+                          value={invitePhone}
+                          onChangeText={setInvitePhone}
+                          keyboardType="phone-pad"
+                        />
+                      </ThemedView>
+
+                      <ThemedView style={styles.inputWrapper}>
+                        <ThemedText type="smallBold">Role</ThemedText>
+                        <ThemedView style={styles.roleContainer}>
+                          <TouchableOpacity
+                            style={[
+                              styles.roleSelectBtn,
+                              {
+                                backgroundColor: inviteRole === 'EDITOR' ? theme.text : theme.background,
+                                borderColor: theme.text,
+                              },
+                            ]}
+                            onPress={() => setInviteRole('EDITOR')}
+                          >
+                            <ThemedText style={{ color: inviteRole === 'EDITOR' ? theme.background : theme.text }}>
+                              Editor
+                            </ThemedText>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[
+                              styles.roleSelectBtn,
+                              {
+                                backgroundColor: inviteRole === 'VIEWER' ? theme.text : theme.background,
+                                borderColor: theme.text,
+                              },
+                            ]}
+                            onPress={() => setInviteRole('VIEWER')}
+                          >
+                            <ThemedText style={{ color: inviteRole === 'VIEWER' ? theme.background : theme.text }}>
+                              Viewer
+                            </ThemedText>
+                          </TouchableOpacity>
+                        </ThemedView>
+                      </ThemedView>
+
+                      <ThemedView style={styles.inputWrapper}>
+                        <ThemedText type="smallBold">Budget Limit (Optional)</ThemedText>
+                        <TextInput
+                          style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
+                          placeholder="e.g. 50000 (leave blank for unlimited)"
+                          placeholderTextColor={theme.textSecondary}
+                          value={allocatedBudget}
+                          onChangeText={setAllocatedBudget}
+                          keyboardType="numeric"
+                        />
+                      </ThemedView>
+
+                      <ThemedView style={styles.inputWrapper}>
+                        <ThemedText type="smallBold">Allowed Sections</ThemedText>
+                        <ThemedView style={styles.checkboxContainer}>
+                          {['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'].map((mod) => {
+                            const isChecked = selectedModules.includes(mod);
+                            return (
+                              <TouchableOpacity
+                                key={mod}
+                                style={[
+                                  styles.checkboxBtn,
+                                  {
+                                    borderColor: isChecked ? theme.text : theme.border,
+                                    backgroundColor: isChecked ? 'rgba(233, 30, 99, 0.08)' : 'transparent',
+                                  },
+                                ]}
+                                onPress={() => {
+                                  if (isChecked) {
+                                    setSelectedModules(selectedModules.filter(m => m !== mod));
+                                  } else {
+                                    setSelectedModules([...selectedModules, mod]);
+                                  }
+                                }}
+                              >
+                                <Ionicons
+                                  name={isChecked ? 'checkbox-outline' : 'square-outline'}
+                                  size={14}
+                                  color={isChecked ? theme.text : theme.textSecondary}
+                                />
+                                <ThemedText style={{ fontSize: 12, color: isChecked ? theme.text : theme.textSecondary }}>
+                                  {mod}
+                                </ThemedText>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ThemedView>
+                      </ThemedView>
+
+                      <TouchableOpacity
+                        style={[styles.button, { backgroundColor: '#E91E63' }]}
+                        onPress={handleSendInvite}
+                        disabled={sendInviteMutation.isPending}
+                      >
+                        {sendInviteMutation.isPending ? (
+                          <ActivityIndicator color="#fff" />
+                        ) : (
+                          <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>Send Invitation</ThemedText>
+                        )}
+                      </TouchableOpacity>
+                    </ThemedView>
+                  )}
+
               {/* Edit Workspace details */}
               {currentWorkspace && isOwnerOrEditor && (
                 <ThemedView type="backgroundElement" style={styles.card}>
