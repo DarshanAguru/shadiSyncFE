@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme, Platform, StyleSheet, View, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/theme';
 import { ThemedText } from './themed-text';
@@ -15,6 +16,9 @@ export default function AppTabs() {
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
   const setCurrentWorkspace = useWorkspaceStore((state) => state.setCurrentWorkspace);
   const { data: workspacesData } = useWorkspaces();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 24 : 12);
+  const tabBarHeight = (Platform.OS === 'ios' ? 56 : 52) + bottomPadding;
 
   useEffect(() => {
     if (workspacesData?.workspaces && currentWorkspace) {
@@ -76,6 +80,8 @@ export default function AppTabs() {
           {
             backgroundColor: colors.backgroundElement,
             borderColor: colors.backgroundSelected,
+            height: tabBarHeight,
+            paddingBottom: bottomPadding,
           },
         ],
         tabBarLabelStyle: styles.tabBarLabel,
@@ -160,10 +166,8 @@ export default function AppTabs() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    height: Platform.OS === 'ios' ? 84 : 64,
     borderTopWidth: 1,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',

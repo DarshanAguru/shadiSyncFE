@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, View } from 'react-native';
+import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, View, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -48,6 +48,22 @@ export default function MoreScreen() {
       setSelectedMenu(tab);
     }
   }, [tab]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectedMenu !== null) {
+        setSelectedMenu(null);
+        return true; // prevent default behavior
+      }
+      return false; // let default behavior happen
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [selectedMenu]);
 
   const { showToast } = useToastStore();
   const [showDatePicker, setShowDatePicker] = useState(false);

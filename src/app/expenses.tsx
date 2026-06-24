@@ -10,6 +10,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   RefreshControl,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,6 +104,23 @@ export default function ExpensesScreen() {
       router.setParams({ action: undefined });
     }
   }, [params.action]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (mode !== 'LIST') {
+        setMode('LIST');
+        resetExpenseForm();
+        return true; // prevent default behavior
+      }
+      return false; // let default behavior happen
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [mode]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -1514,7 +1532,7 @@ const styles = StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: Spacing.four + 64,
+    bottom: BottomTabInset + 16,
     right: Spacing.four,
     width: 56,
     height: 56,

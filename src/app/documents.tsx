@@ -10,6 +10,7 @@ import {
   RefreshControl,
   Linking,
   Alert,
+  BackHandler,
 } from 'react-native';
 import { useToastStore } from '@/stores/toastStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -86,6 +87,23 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
       setCurrentFolderName(routeFolderName || 'Folder');
     }
   }, [routeFolderId, routeFolderName]);
+
+  useEffect(() => {
+    const onBackPress = () => {
+      if (currentFolderId !== 'root') {
+        setCurrentFolderId('root');
+        setCurrentFolderName('');
+        return true; // prevent default behavior
+      }
+      return false; // let default behavior happen
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+
+    return () => {
+      subscription.remove();
+    };
+  }, [currentFolderId]);
 
   // UI state
   const [showFolderForm, setShowFolderForm] = useState(false);
@@ -706,7 +724,7 @@ const styles = StyleSheet.create({
   },
   fabButton: {
     position: 'absolute',
-    bottom: Spacing.four + 64,
+    bottom: BottomTabInset + 16,
     right: Spacing.four,
     width: 56,
     height: 56,
