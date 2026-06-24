@@ -7,6 +7,8 @@ import {
   ActivityIndicator,
   Platform,
   View,
+  RefreshControl,
+  Linking,
 } from 'react-native';
 import { useToastStore } from '@/stores/toastStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -95,6 +97,22 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
     currentWorkspace?.id,
     currentFolderId
   );
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchFolders?.(),
+        refetchDocs?.(),
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchFolders, refetchDocs]);
 
   // Mutations
   const createFolderMutation = useCreateFolder();
@@ -221,7 +239,19 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
     <ThemedView style={styles.container}>
       <ContainerView style={styles.safeArea}>
         <WorkspaceGuard currentWorkspace={currentWorkspace}>
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: BottomTabInset + 20 }]}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#5D0921']}
+                tintColor={'#5D0921'}
+              />
+            }
+          >
             
             {/* Header section */}
             {!nested ? (
@@ -456,6 +486,20 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                           }}
                         >
                           <ThemedText style={{ fontSize: 11, color: theme.text }}>View</ThemedText>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.viewBtn, { borderColor: theme.border }]}
+                          onPress={async () => {
+                            const resolved = resolveFileUrl(doc.file_url);
+                            try {
+                              await Linking.openURL(resolved);
+                            } catch (err) {
+                              showToast('Error', 'Could not start download', 'error');
+                            }
+                          }}
+                        >
+                          <ThemedText style={{ fontSize: 11, color: theme.text }}>Download</ThemedText>
                         </TouchableOpacity>
 
                         {canDelete && (

@@ -160,24 +160,19 @@ export default function AppTabs() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 24 : 16,
-    left: 16,
-    right: 16,
-    borderRadius: 20,
-    height: 64,
-    borderWidth: 1,
+    height: Platform.OS === 'ios' ? 84 : 64,
+    borderTopWidth: 1,
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 8 : 10,
+    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
     ...Platform.select({
       ios: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.12,
-        shadowRadius: 12,
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
       },
       android: {
-        elevation: 6,
+        elevation: 8,
       },
     }),
   },

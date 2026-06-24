@@ -9,6 +9,7 @@ import {
   View,
   Platform,
   KeyboardAvoidingView,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { safeFormatDate } from '@/utils/date';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DropdownSelect } from '@/components/dropdown-select';
 import { WorkspaceGuard } from '@/components/workspaces/WorkspaceGuard';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
@@ -37,6 +39,9 @@ import { useTasks, useWorkspaceMembers } from '@/hooks/useTasks';
 import { hasPermission } from '@/utils/permissions';
 import { PermissionGuard } from '@/components/permissions/PermissionGuard';
 import AttachmentSection from '@/components/attachments/AttachmentSection';
+import * as DocumentPicker from 'expo-document-picker';
+import { useUploadDocument } from '@/hooks/useDocuments';
+import { useCreateAttachment } from '@/hooks/useAttachments';
 
 // Helper to get category icons
 const getCategoryIcon = (categoryName?: string | null): string => {
@@ -54,12 +59,32 @@ export default function ExpensesScreen() {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const params = useLocalSearchParams<{ action?: string }>();
 
-  const { data: budgetData, isLoading: budgetLoading, isError: budgetError } = useBudget(currentWorkspace?.id);
+  const { data: budgetData, isLoading: budgetLoading, isError: budgetError, refetch: refetchBudget } = useBudget(currentWorkspace?.id);
   const { data: expensesData, isLoading: expensesLoading, isError: expensesError, refetch: refetchExpenses } = useExpensesList(currentWorkspace?.id);
-  const { data: eventsData } = useEvents(currentWorkspace?.id);
-  const { data: categoriesData } = useCategories(currentWorkspace?.id);
-  const { data: tasksData } = useTasks(currentWorkspace?.id);
-  const { data: membersData } = useWorkspaceMembers(currentWorkspace?.id);
+  const { data: eventsData, refetch: refetchEvents } = useEvents(currentWorkspace?.id);
+  const { data: categoriesData, refetch: refetchCategories } = useCategories(currentWorkspace?.id);
+  const { data: tasksData, refetch: refetchTasks } = useTasks(currentWorkspace?.id);
+  const { data: membersData, refetch: refetchMembers } = useWorkspaceMembers(currentWorkspace?.id);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchBudget?.(),
+        refetchExpenses?.(),
+        refetchEvents?.(),
+        refetchCategories?.(),
+        refetchTasks?.(),
+        refetchMembers?.(),
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchBudget, refetchExpenses, refetchEvents, refetchCategories, refetchTasks, refetchMembers]);
 
   const tasks = tasksData?.tasks || [];
   const members = membersData?.members || [];
@@ -113,6 +138,27 @@ export default function ExpensesScreen() {
   const [selectedEventId, setSelectedEventId] = useState('');
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [pendingFiles, setPendingFiles] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
+  const uploadDocMutation = useUploadDocument();
+  const createAttachMutation = useCreateAttachment();
+
+  const handleChoosePendingFiles = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      setPendingFiles((prev) => [...prev, ...result.assets]);
+    } catch (err: any) {
+      showToast('Error', 'Failed to pick files', 'error');
+    }
+  };
+
+  const handleRemovePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, idx) => idx !== index));
+  };
 
   const resetExpenseForm = () => {
     setAmount('');
@@ -123,6 +169,7 @@ export default function ExpensesScreen() {
     setExpenseDate(new Date().toISOString().split('T')[0]);
     setSelectedExpense(null);
     setShowDatePicker(false);
+    setPendingFiles([]);
   };
 
   const handleUpdateBudget = async () => {
@@ -154,7 +201,7 @@ export default function ExpensesScreen() {
     }
 
     try {
-      await createExpenseMutation.mutateAsync({
+      const res = await createExpenseMutation.mutateAsync({
         workspaceId: currentWorkspace.id,
         amount: val,
         description: description.trim() || undefined,
@@ -163,6 +210,44 @@ export default function ExpensesScreen() {
         taskId: selectedTaskId || undefined,
         expenseDate: expenseDate || undefined,
       });
+
+      const newExpenseId = res.expense.id;
+
+      if (pendingFiles.length > 0) {
+        showToast('Uploading', `Uploading ${pendingFiles.length} attachment(s)...`, 'info');
+        for (const asset of pendingFiles) {
+          const formData = new FormData();
+          formData.append('workspaceId', currentWorkspace.id);
+
+          if (Platform.OS === 'web') {
+            if ((asset as any).file) {
+              formData.append('file', (asset as any).file, asset.name);
+            } else {
+              const fetchRes = await fetch(asset.uri);
+              const blob = await fetchRes.blob();
+              formData.append('file', blob, asset.name);
+            }
+          } else {
+            formData.append('file', {
+              uri: asset.uri,
+              name: asset.name,
+              type: asset.mimeType || 'application/octet-stream',
+            } as any);
+          }
+
+          const uploadRes = await uploadDocMutation.mutateAsync({
+            workspaceId: currentWorkspace.id,
+            formData,
+          });
+
+          await createAttachMutation.mutateAsync({
+            documentId: uploadRes.document.id,
+            entityType: 'EXPENSE',
+            entityId: newExpenseId,
+          });
+        }
+      }
+
       showToast('Success', 'Expense logged successfully', 'success');
       setMode('LIST');
       resetExpenseForm();
@@ -500,100 +585,66 @@ export default function ExpensesScreen() {
                 </ThemedView>
 
                 {/* Category selector */}
-                <ThemedView style={styles.inputWrapper}>
-                  <ThemedText type="smallBold">Category</ThemedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.selectorBtn,
-                        { backgroundColor: selectedCategoryId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                      ]}
-                      onPress={() => setSelectedCategoryId('')}
-                    >
-                      <ThemedText style={{ color: selectedCategoryId === '' ? theme.background : theme.text, fontSize: 13 }}>
-                        None
-                      </ThemedText>
-                    </TouchableOpacity>
-                    {categories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          styles.selectorBtn,
-                          { backgroundColor: selectedCategoryId === cat.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                        ]}
-                        onPress={() => setSelectedCategoryId(cat.id)}
-                      >
-                        <ThemedText style={{ color: selectedCategoryId === cat.id ? theme.background : theme.text, fontSize: 13 }}>
-                          {cat.name}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </ThemedView>
+                <DropdownSelect
+                  label="Category"
+                  options={[
+                    { label: 'None', value: '' },
+                    ...categories.map((cat) => ({
+                      label: cat.name,
+                      value: cat.id,
+                    })),
+                  ]}
+                  selectedValue={selectedCategoryId}
+                  onValueChange={(val) => setSelectedCategoryId(val)}
+                />
 
                 {/* Event selector */}
-                <ThemedView style={styles.inputWrapper}>
-                  <ThemedText type="smallBold">Event Link</ThemedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.selectorBtn,
-                        { backgroundColor: selectedEventId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                      ]}
-                      onPress={() => setSelectedEventId('')}
-                    >
-                      <ThemedText style={{ color: selectedEventId === '' ? theme.background : theme.text, fontSize: 13 }}>
-                        None
-                      </ThemedText>
-                    </TouchableOpacity>
-                    {events.map((event) => (
-                      <TouchableOpacity
-                        key={event.id}
-                        style={[
-                          styles.selectorBtn,
-                          { backgroundColor: selectedEventId === event.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                        ]}
-                        onPress={() => setSelectedEventId(event.id)}
-                      >
-                        <ThemedText style={{ color: selectedEventId === event.id ? theme.background : theme.text, fontSize: 13 }}>
-                          {event.title}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </ThemedView>
+                <DropdownSelect
+                  label="Event Link"
+                  options={[
+                    { label: 'None', value: '' },
+                    ...events.map((event) => ({
+                      label: event.title,
+                      value: event.id,
+                    })),
+                  ]}
+                  selectedValue={selectedEventId}
+                  onValueChange={(val) => setSelectedEventId(val)}
+                />
 
                 {/* Task selector */}
-                <ThemedView style={styles.inputWrapper}>
-                  <ThemedText type="smallBold">Task Link</ThemedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
+                <DropdownSelect
+                  label="Task Link"
+                  options={[
+                    { label: 'None', value: '' },
+                    ...tasks.map((task) => ({
+                      label: task.title,
+                      value: task.id,
+                    })),
+                  ]}
+                  selectedValue={selectedTaskId}
+                  onValueChange={(val) => setSelectedTaskId(val)}
+                />
+
+                {mode === 'CREATE' && (
+                  <ThemedView style={[styles.inputWrapper, { marginTop: Spacing.two }]}>
+                    <ThemedText type="smallBold">Attach Files (optional)</ThemedText>
                     <TouchableOpacity
-                      style={[
-                        styles.selectorBtn,
-                        { backgroundColor: selectedTaskId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                      ]}
-                      onPress={() => setSelectedTaskId('')}
+                      style={[styles.selectorBtn, { borderColor: theme.border, alignSelf: 'flex-start', marginTop: 4 }]}
+                      onPress={handleChoosePendingFiles}
                     >
-                      <ThemedText style={{ color: selectedTaskId === '' ? theme.background : theme.text, fontSize: 13 }}>
-                        None
-                      </ThemedText>
+                      <ThemedText style={{ color: theme.text, fontSize: 13 }}>+ Choose Files</ThemedText>
                     </TouchableOpacity>
-                    {tasks.map((task) => (
-                      <TouchableOpacity
-                        key={task.id}
-                        style={[
-                          styles.selectorBtn,
-                          { backgroundColor: selectedTaskId === task.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                        ]}
-                        onPress={() => setSelectedTaskId(task.id)}
-                      >
-                        <ThemedText style={{ color: selectedTaskId === task.id ? theme.background : theme.text, fontSize: 13 }}>
-                          {task.title}
-                        </ThemedText>
-                      </TouchableOpacity>
+                    {pendingFiles.map((file, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, backgroundColor: theme.backgroundSelected, padding: 8, borderRadius: 6 }}>
+                        <ThemedText style={{ flex: 1, fontSize: 12, color: theme.text }} numberOfLines={1}>📄 {file.name}</ThemedText>
+                        <TouchableOpacity onPress={() => handleRemovePendingFile(idx)}>
+                          <Ionicons name="close-circle" size={18} color="#ff3b30" />
+                        </TouchableOpacity>
+                      </View>
                     ))}
-                  </ScrollView>
-                </ThemedView>
+                  </ThemedView>
+                )}
 
                 <TouchableOpacity
                   style={[styles.button, { backgroundColor: theme.text, marginTop: Spacing.two }]}
@@ -621,7 +672,19 @@ export default function ExpensesScreen() {
               </ThemedView>
             </ScrollView>
           ) : (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: BottomTabInset + 20 }]}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#5D0921']}
+                  tintColor={'#5D0921'}
+                />
+              }
+            >
               
               {/* HEADER BAR (Hamburger, centered Title, Search/Filter icons) */}
               <View style={styles.appHeaderRow}>
@@ -1306,8 +1369,10 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   textArea: {
-    height: 72,
-    paddingTop: Spacing.two,
+    minHeight: 80,
+    paddingTop: 10,
+    paddingBottom: 10,
+    textAlignVertical: 'top',
   },
   selectorBtn: {
     paddingHorizontal: Spacing.three,

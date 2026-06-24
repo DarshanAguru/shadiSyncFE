@@ -8,6 +8,7 @@ import {
   View,
   Platform,
   KeyboardAvoidingView,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +19,7 @@ import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { DropdownSelect } from '@/components/dropdown-select';
 import { WorkspaceGuard } from '@/components/workspaces/WorkspaceGuard';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -35,6 +37,9 @@ import { useEvents, useCategories } from '@/hooks/useEventsAndCategories';
 import { hasPermission } from '@/utils/permissions';
 import { PermissionGuard } from '@/components/permissions/PermissionGuard';
 import AttachmentSection from '@/components/attachments/AttachmentSection';
+import * as DocumentPicker from 'expo-document-picker';
+import { useUploadDocument } from '@/hooks/useDocuments';
+import { useCreateAttachment } from '@/hooks/useAttachments';
 
 export default function TasksScreen() {
   const theme = useTheme();
@@ -42,10 +47,28 @@ export default function TasksScreen() {
   const currentUser = useAuthStore((state) => state.user);
   const params = useLocalSearchParams<{ action?: string }>();
 
-  const { data: tasksData, isLoading, isError, refetch } = useTasks(currentWorkspace?.id);
-  const { data: membersData } = useWorkspaceMembers(currentWorkspace?.id);
-  const { data: eventsData } = useEvents(currentWorkspace?.id);
-  const { data: categoriesData } = useCategories(currentWorkspace?.id);
+  const { data: tasksData, isLoading, isError, refetch: refetchTasks } = useTasks(currentWorkspace?.id);
+  const { data: membersData, refetch: refetchMembers } = useWorkspaceMembers(currentWorkspace?.id);
+  const { data: eventsData, refetch: refetchEvents } = useEvents(currentWorkspace?.id);
+  const { data: categoriesData, refetch: refetchCategories } = useCategories(currentWorkspace?.id);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchTasks?.(),
+        refetchMembers?.(),
+        refetchEvents?.(),
+        refetchCategories?.(),
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refetchTasks, refetchMembers, refetchEvents, refetchCategories]);
 
   const createMutation = useCreateTask();
   const updateMutation = useUpdateTask();
@@ -87,6 +110,27 @@ export default function TasksScreen() {
   const [dueDate, setDueDate] = useState(new Date().toISOString().split('T')[0]);
   const [eventId, setEventId] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<DocumentPicker.DocumentPickerAsset[]>([]);
+  const uploadDocMutation = useUploadDocument();
+  const createAttachMutation = useCreateAttachment();
+
+  const handleChoosePendingFiles = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+      setPendingFiles((prev) => [...prev, ...result.assets]);
+    } catch (err: any) {
+      showToast('Error', 'Failed to pick files', 'error');
+    }
+  };
+
+  const handleRemovePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, idx) => idx !== index));
+  };
 
   const resetForm = () => {
     setTitle('');
@@ -99,6 +143,7 @@ export default function TasksScreen() {
     setCategoryId('');
     setSelectedTask(null);
     setShowDatePicker(false);
+    setPendingFiles([]);
   };
 
   const handleCreate = async () => {
@@ -109,7 +154,7 @@ export default function TasksScreen() {
     }
 
     try {
-      await createMutation.mutateAsync({
+      const res = await createMutation.mutateAsync({
         workspaceId: currentWorkspace.id,
         title: title.trim(),
         description: description.trim() || undefined,
@@ -119,6 +164,44 @@ export default function TasksScreen() {
         eventId: eventId || undefined,
         categoryId: categoryId || undefined,
       });
+
+      const newTaskId = res.task.id;
+
+      if (pendingFiles.length > 0) {
+        showToast('Uploading', `Uploading ${pendingFiles.length} attachment(s)...`, 'info');
+        for (const asset of pendingFiles) {
+          const formData = new FormData();
+          formData.append('workspaceId', currentWorkspace.id);
+
+          if (Platform.OS === 'web') {
+            if ((asset as any).file) {
+              formData.append('file', (asset as any).file, asset.name);
+            } else {
+              const fetchRes = await fetch(asset.uri);
+              const blob = await fetchRes.blob();
+              formData.append('file', blob, asset.name);
+            }
+          } else {
+            formData.append('file', {
+              uri: asset.uri,
+              name: asset.name,
+              type: asset.mimeType || 'application/octet-stream',
+            } as any);
+          }
+
+          const uploadRes = await uploadDocMutation.mutateAsync({
+            workspaceId: currentWorkspace.id,
+            formData,
+          });
+
+          await createAttachMutation.mutateAsync({
+            documentId: uploadRes.document.id,
+            entityType: 'TASK',
+            entityId: newTaskId,
+          });
+        }
+      }
+
       showToast('Success', 'Task created successfully', 'success');
       setMode('LIST');
       resetForm();
@@ -229,11 +312,22 @@ export default function TasksScreen() {
   const categories = categoriesData?.categories || [];
   const canCreate = hasPermission(currentWorkspace?.role, 'Tasks', 'create');
   const canEdit = hasPermission(currentWorkspace?.role, 'Tasks', 'edit');
-  const isSelectedTaskEditable = selectedTask 
-    ? (canEdit || selectedTask.assigned_to === currentUser?.id || selectedTask.created_by === currentUser?.id)
-    : true;
-  const isTaskEditable = (task: TaskItem) => 
-    canEdit || task.assigned_to === currentUser?.id || task.created_by === currentUser?.id;
+  const canModifyTask = (task: TaskItem) => {
+    const isOwner = currentWorkspace?.role === 'OWNER';
+    if (isOwner) return true;
+    
+    if (task.assigned_to) {
+      // Only workspace owner and the assigned user can change the task
+      return task.assigned_to === currentUser?.id;
+    }
+    
+    // Fallback if task is unassigned: creator or workspace edit permission
+    const isCreator = task.created_by === currentUser?.id;
+    const hasEditPerm = hasPermission(currentWorkspace?.role, 'Tasks', 'edit');
+    return isCreator || hasEditPerm;
+  };
+
+  const isSelectedTaskEditable = selectedTask ? canModifyTask(selectedTask) : true;
 
   // Stats Counters
   const totalCount = tasks.length;
@@ -275,7 +369,7 @@ export default function TasksScreen() {
           ) : isError ? (
             <ThemedView style={styles.center}>
               <ThemedText>Error loading tasks.</ThemedText>
-              <TouchableOpacity style={styles.button} onPress={() => refetch()}>
+              <TouchableOpacity style={styles.button} onPress={() => refetchTasks()}>
                 <ThemedText style={{ color: theme.background }}>Retry</ThemedText>
               </TouchableOpacity>
             </ThemedView>
@@ -367,42 +461,21 @@ export default function TasksScreen() {
                 )}
 
                 {/* Assignment workflow */}
-                <ThemedView style={styles.inputWrapper}>
-                  <ThemedText type="smallBold">Assign to Team Member</ThemedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.selectorBtn,
-                        { backgroundColor: assignedTo === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                      ]}
-                      onPress={() => {
-                        if (mode === 'CREATE' || isSelectedTaskEditable) setAssignedTo('');
-                      }}
-                      disabled={mode === 'EDIT' && !isSelectedTaskEditable}
-                    >
-                      <ThemedText style={{ color: assignedTo === '' ? theme.background : theme.text, fontSize: 13 }}>
-                        Unassigned
-                      </ThemedText>
-                    </TouchableOpacity>
-                    {members.map((member) => (
-                      <TouchableOpacity
-                        key={member.id}
-                        style={[
-                          styles.selectorBtn,
-                          { backgroundColor: assignedTo === member.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                        ]}
-                        onPress={() => {
-                          if (mode === 'CREATE' || isSelectedTaskEditable) setAssignedTo(member.id);
-                        }}
-                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
-                      >
-                        <ThemedText style={{ color: assignedTo === member.id ? theme.background : theme.text, fontSize: 13 }}>
-                          {member.name}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </ThemedView>
+                <DropdownSelect
+                  label="Assign to Team Member"
+                  options={[
+                    { label: 'Unassigned', value: '' },
+                    ...members.map((member) => ({
+                      label: member.name,
+                      value: member.id,
+                    })),
+                  ]}
+                  selectedValue={assignedTo}
+                  onValueChange={(val) => {
+                    if (mode === 'CREATE' || isSelectedTaskEditable) setAssignedTo(val);
+                  }}
+                  disabled={mode === 'EDIT' && !isSelectedTaskEditable}
+                />
 
                  <ThemedView style={styles.inputWrapper}>
                   <ThemedText type="smallBold">Due Date</ThemedText>
@@ -445,80 +518,58 @@ export default function TasksScreen() {
                 </ThemedView>
 
                 {/* Associated Event Selector */}
-                <ThemedView style={styles.inputWrapper}>
-                  <ThemedText type="smallBold">Link to Event</ThemedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
-                    <TouchableOpacity
-                      style={[
-                        styles.selectorBtn,
-                        { backgroundColor: eventId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                      ]}
-                      onPress={() => {
-                        if (mode === 'CREATE' || isSelectedTaskEditable) setEventId('');
-                      }}
-                      disabled={mode === 'EDIT' && !isSelectedTaskEditable}
-                    >
-                      <ThemedText style={{ color: eventId === '' ? theme.background : theme.text, fontSize: 13 }}>
-                        None
-                      </ThemedText>
-                    </TouchableOpacity>
-                    {events.map((event) => (
-                      <TouchableOpacity
-                        key={event.id}
-                        style={[
-                          styles.selectorBtn,
-                          { backgroundColor: eventId === event.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                        ]}
-                        onPress={() => {
-                          if (mode === 'CREATE' || isSelectedTaskEditable) setEventId(event.id);
-                        }}
-                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
-                      >
-                        <ThemedText style={{ color: eventId === event.id ? theme.background : theme.text, fontSize: 13 }}>
-                          {event.title}
-                        </ThemedText>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </ThemedView>
+                <DropdownSelect
+                  label="Link to Event"
+                  options={[
+                    { label: 'None', value: '' },
+                    ...events.map((event) => ({
+                      label: event.title,
+                      value: event.id,
+                    })),
+                  ]}
+                  selectedValue={eventId}
+                  onValueChange={(val) => {
+                    if (mode === 'CREATE' || isSelectedTaskEditable) setEventId(val);
+                  }}
+                  disabled={mode === 'EDIT' && !isSelectedTaskEditable}
+                />
 
                 {/* Associated Category Selector */}
-                <ThemedView style={styles.inputWrapper}>
-                  <ThemedText type="smallBold">Link to Category</ThemedText>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalRow}>
+                <DropdownSelect
+                  label="Link to Category"
+                  options={[
+                    { label: 'None', value: '' },
+                    ...categories.map((cat) => ({
+                      label: cat.name,
+                      value: cat.id,
+                    })),
+                  ]}
+                  selectedValue={categoryId}
+                  onValueChange={(val) => {
+                    if (mode === 'CREATE' || isSelectedTaskEditable) setCategoryId(val);
+                  }}
+                  disabled={mode === 'EDIT' && !isSelectedTaskEditable}
+                />
+
+                {mode === 'CREATE' && (
+                  <ThemedView style={[styles.inputWrapper, { marginTop: Spacing.two }]}>
+                    <ThemedText type="smallBold">Attach Files (optional)</ThemedText>
                     <TouchableOpacity
-                      style={[
-                        styles.selectorBtn,
-                        { backgroundColor: categoryId === '' ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                      ]}
-                      onPress={() => {
-                        if (mode === 'CREATE' || isSelectedTaskEditable) setCategoryId('');
-                      }}
-                      disabled={mode === 'EDIT' && !isSelectedTaskEditable}
+                      style={[styles.selectorBtn, { borderColor: theme.border, alignSelf: 'flex-start', marginTop: 4 }]}
+                      onPress={handleChoosePendingFiles}
                     >
-                      <ThemedText style={{ color: categoryId === '' ? theme.background : theme.text, fontSize: 13 }}>
-                        None
-                      </ThemedText>
+                      <ThemedText style={{ color: theme.text, fontSize: 13 }}>+ Choose Files</ThemedText>
                     </TouchableOpacity>
-                    {categories.map((cat) => (
-                      <TouchableOpacity
-                        key={cat.id}
-                        style={[
-                          styles.selectorBtn,
-                          { backgroundColor: categoryId === cat.id ? theme.text : theme.backgroundSelected, borderColor: theme.border },
-                        ]}
-                        onPress={() => {
-                          if (mode === 'CREATE' || isSelectedTaskEditable) setCategoryId(cat.id);
-                        }}
-                        disabled={mode === 'EDIT' && !isSelectedTaskEditable}
-                      >
-                        <ThemedText style={{ color: categoryId === cat.id ? theme.background : theme.text, fontSize: 13 }}>
-                          {cat.name}
-                        </ThemedText>
-                      </TouchableOpacity>
+                    {pendingFiles.map((file, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 6, backgroundColor: theme.backgroundSelected, padding: 8, borderRadius: 6 }}>
+                        <ThemedText style={{ flex: 1, fontSize: 12, color: theme.text }} numberOfLines={1}>📄 {file.name}</ThemedText>
+                        <TouchableOpacity onPress={() => handleRemovePendingFile(idx)}>
+                          <Ionicons name="close-circle" size={18} color="#ff3b30" />
+                        </TouchableOpacity>
+                      </View>
                     ))}
-                  </ScrollView>
-                </ThemedView>
+                  </ThemedView>
+                )}
 
                 {(mode === 'CREATE' || isSelectedTaskEditable) && (
                   <TouchableOpacity
@@ -558,7 +609,19 @@ export default function TasksScreen() {
               </ThemedView>
             </ScrollView>
           ) : (
-            <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={[styles.scrollContent, { paddingBottom: BottomTabInset + 20 }]}
+              showsVerticalScrollIndicator={false}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  colors={['#5D0921']}
+                  tintColor={'#5D0921'}
+                />
+              }
+            >
               
               {/* HEADER BAR (Hamburger, centered Title, Add/Filter icons) */}
               <View style={styles.appHeaderRow}>
@@ -708,10 +771,10 @@ export default function TasksScreen() {
                               }
                             ]}
                             onPress={() => {
-                              if (isTaskEditable(task)) {
+                              if (canModifyTask(task)) {
                                 handleToggleCompleted(task);
                               } else {
-                                showToast('Permission Denied', 'You do not have permission to modify task status', 'error');
+                                showToast('Permission Denied', 'Only the owner and the assigned user can modify this task status', 'error');
                               }
                             }}
                           >
@@ -779,16 +842,16 @@ export default function TasksScreen() {
                             {renderPriorityBadge(task.priority)}
                             
                             <View style={styles.rowActionsBtn}>
-                              <PermissionGuard module="Tasks" action="edit">
-                                <TouchableOpacity onPress={() => handleEdit(task)} style={styles.actionIconBtn}>
-                                  <Ionicons name="create-outline" size={16} color="#7C5C62" />
-                                </TouchableOpacity>
-                              </PermissionGuard>
-                              <PermissionGuard module="Tasks" action="delete">
-                                <TouchableOpacity onPress={() => handleDelete(task)} style={styles.actionIconBtn}>
-                                  <Ionicons name="trash-outline" size={16} color="#F44336" />
-                                </TouchableOpacity>
-                              </PermissionGuard>
+                              {canModifyTask(task) && (
+                                <>
+                                  <TouchableOpacity onPress={() => handleEdit(task)} style={styles.actionIconBtn}>
+                                    <Ionicons name="create-outline" size={16} color="#7C5C62" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity onPress={() => handleDelete(task)} style={styles.actionIconBtn}>
+                                    <Ionicons name="trash-outline" size={16} color="#F44336" />
+                                  </TouchableOpacity>
+                                </>
+                              )}
                             </View>
                           </View>
                         </View>
@@ -1068,8 +1131,10 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   textArea: {
-    height: 72,
-    paddingTop: Spacing.two,
+    minHeight: 80,
+    paddingTop: 10,
+    paddingBottom: 10,
+    textAlignVertical: 'top',
   },
   rowSelector: {
     flexDirection: 'row',

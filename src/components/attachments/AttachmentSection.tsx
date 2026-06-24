@@ -4,10 +4,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   ScrollView,
+  Platform,
+  View,
+  Linking,
 } from 'react-native';
 import { useToastStore } from '@/stores/toastStore';
 import * as WebBrowser from 'expo-web-browser';
 import { router } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { useUploadDocument } from '../../hooks/useDocuments';
 
 import { ThemedText } from '../themed-text';
 import { ThemedView } from '../themed-view';
@@ -59,6 +64,8 @@ export default function AttachmentSection({
   // States
   const [showSelectFlow, setShowSelectFlow] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const uploadDocMutation = useUploadDocument();
 
   const handleAttach = async () => {
     if (!selectedFolderId) {
@@ -89,22 +96,95 @@ export default function AttachmentSection({
     }
   };
 
-  const attachments = (attachmentsData?.attachments || []).filter((att) => !!att.folder_id);
+  const handleUploadFiles = async () => {
+    if (!currentWorkspace) return;
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+        multiple: true,
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        return;
+      }
+
+      setIsUploading(true);
+
+      for (const asset of result.assets) {
+        const formData = new FormData();
+        formData.append('workspaceId', currentWorkspace.id);
+
+        if (Platform.OS === 'web') {
+          if ((asset as any).file) {
+            formData.append('file', (asset as any).file, asset.name);
+          } else {
+            const res = await fetch(asset.uri);
+            const blob = await res.blob();
+            formData.append('file', blob, asset.name);
+          }
+        } else {
+          formData.append('file', {
+            uri: asset.uri,
+            name: asset.name,
+            type: asset.mimeType || 'application/octet-stream',
+          } as any);
+        }
+
+        const uploadRes = await uploadDocMutation.mutateAsync({
+          workspaceId: currentWorkspace.id,
+          formData,
+        });
+
+        await createAttachMutation.mutateAsync({
+          documentId: uploadRes.document.id,
+          entityType,
+          entityId,
+        });
+      }
+
+      showToast('Success', `Uploaded and attached ${result.assets.length} file(s) successfully!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Error', err.message || 'Failed to upload document(s)', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const attachments = attachmentsData?.attachments || [];
   const folders = foldersData?.folders || [];
 
   return (
     <ThemedView type="backgroundElement" style={styles.container}>
       <ThemedView style={styles.header}>
-        <ThemedText type="smallBold" style={{ fontSize: 16 }}>Linked Folders</ThemedText>
+        <ThemedText type="smallBold" style={{ fontSize: 16 }}>Linked Folders & Files</ThemedText>
         {!readOnly && (
-          <TouchableOpacity
-            onPress={() => setShowSelectFlow(!showSelectFlow)}
-            style={[styles.toggleBtn, { borderColor: theme.text }]}
-          >
-            <ThemedText style={{ fontSize: 12 }}>
-              {showSelectFlow ? 'Close' : '+ Attach Folder'}
-            </ThemedText>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: Spacing.two }}>
+            <TouchableOpacity
+              onPress={() => setShowSelectFlow(!showSelectFlow)}
+              style={[styles.toggleBtn, { borderColor: theme.text }]}
+            >
+              <ThemedText style={{ fontSize: 12 }}>
+                {showSelectFlow ? 'Close' : '+ Attach Folder'}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleUploadFiles}
+              disabled={isUploading}
+              style={[styles.toggleBtn, { borderColor: theme.text }]}
+            >
+              {isUploading ? (
+                <ActivityIndicator size="small" color={theme.text} />
+              ) : (
+                <ThemedText style={{ fontSize: 12 }}>
+                  + Upload Files
+                </ThemedText>
+              )}
+            </TouchableOpacity>
+          </View>
         )}
       </ThemedView>
 
@@ -215,19 +295,35 @@ export default function AttachmentSection({
                       <ThemedText style={{ fontSize: 11, color: theme.text }}>Open Folder</ThemedText>
                     </TouchableOpacity>
                   ) : (
-                    <TouchableOpacity
-                      onPress={async () => {
-                        const resolved = resolveFileUrl(att.file_url || '');
-                        try {
-                          await WebBrowser.openBrowserAsync(resolved);
-                        } catch (err) {
-                          showToast('Error', 'Could not open document link', 'error');
-                        }
-                      }}
-                      style={[styles.viewBtn, { borderColor: theme.border }]}
-                    >
-                      <ThemedText style={{ fontSize: 11, color: theme.text }}>View</ThemedText>
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          const resolved = resolveFileUrl(att.file_url || '');
+                          try {
+                            await WebBrowser.openBrowserAsync(resolved);
+                          } catch (err) {
+                            showToast('Error', 'Could not open document link', 'error');
+                          }
+                        }}
+                        style={[styles.viewBtn, { borderColor: theme.border }]}
+                      >
+                        <ThemedText style={{ fontSize: 11, color: theme.text }}>View</ThemedText>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={async () => {
+                          const resolved = resolveFileUrl(att.file_url || '');
+                          try {
+                            await Linking.openURL(resolved);
+                          } catch (err) {
+                            showToast('Error', 'Could not start download', 'error');
+                          }
+                        }}
+                        style={[styles.viewBtn, { borderColor: theme.border }]}
+                      >
+                        <ThemedText style={{ fontSize: 11, color: theme.text }}>Download</ThemedText>
+                      </TouchableOpacity>
+                    </>
                   )}
 
                   {!readOnly && (

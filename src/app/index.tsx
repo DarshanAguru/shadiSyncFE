@@ -11,6 +11,7 @@ import {
   Modal,
   Animated,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -127,13 +128,42 @@ export default function DashboardScreen() {
   };
 
   // Queries
-  const { data: workspacesData } = useWorkspaces();
-  const { data: budgetData, isLoading: budgetLoading } = useBudget(currentWorkspace?.id);
-  const { data: expensesData, isLoading: expensesLoading } = useExpensesList(currentWorkspace?.id);
-  const { data: tasksData, isLoading: tasksLoading } = useTasks(currentWorkspace?.id);
-  const { data: eventsData, isLoading: eventsLoading } = useEvents(currentWorkspace?.id);
-  const { data: notificationsData, isLoading: notificationsLoading } = useNotificationsList();
+  const { data: workspacesData, refetch: refetchWorkspaces } = useWorkspaces();
+  const { data: budgetData, isLoading: budgetLoading, refetch: refetchBudget } = useBudget(currentWorkspace?.id);
+  const { data: expensesData, isLoading: expensesLoading, refetch: refetchExpenses } = useExpensesList(currentWorkspace?.id);
+  const { data: tasksData, isLoading: tasksLoading, refetch: refetchTasks } = useTasks(currentWorkspace?.id);
+  const { data: eventsData, isLoading: eventsLoading, refetch: refetchEvents } = useEvents(currentWorkspace?.id);
+  const { data: notificationsData, isLoading: notificationsLoading, refetch: refetchNotifications } = useNotificationsList();
   const { data: invitesData, refetch: refetchInvites } = usePendingInvitations();
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        refetchWorkspaces?.(),
+        refetchBudget?.(),
+        refetchExpenses?.(),
+        refetchTasks?.(),
+        refetchEvents?.(),
+        refetchNotifications?.(),
+        refetchInvites?.(),
+      ]);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [
+    refetchWorkspaces,
+    refetchBudget,
+    refetchExpenses,
+    refetchTasks,
+    refetchEvents,
+    refetchNotifications,
+    refetchInvites,
+  ]);
 
   const markAsReadMutation = useMarkAsRead();
   const registerPushTokenMutation = useRegisterPushToken();
@@ -369,7 +399,19 @@ export default function DashboardScreen() {
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: BottomTabInset + 20 }]}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#5D0921']}
+              tintColor={'#5D0921'}
+            />
+          }
+        >
           
           {/* TOP HEADER CARD (Deep Maroon, Wedding Theme) */}
           <View style={[styles.weddingHeaderCard, { backgroundColor: '#5D0921' }]}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { StyleSheet, ScrollView, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -40,12 +40,12 @@ export default function MoreScreen() {
   const archiveMutation = useArchiveWorkspace();
   const sendInviteMutation = useSendInvitation();
 
-  // Navigation tab state
-  const [activeTab, setActiveTab] = useState<SettingsTab>('WORKSPACE');
+  // Navigation menu state
+  const [selectedMenu, setSelectedMenu] = useState<SettingsTab | null>(null);
 
   useEffect(() => {
     if (tab) {
-      setActiveTab(tab);
+      setSelectedMenu(tab);
     }
   }, [tab]);
 
@@ -261,254 +261,169 @@ export default function MoreScreen() {
             </ThemedText>
           </ThemedView>
 
-          {/* Segment Toggle Bar */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.segmentContainerWrapper}
-            contentContainerStyle={styles.segmentScroll}
-          >
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                { backgroundColor: activeTab === 'WORKSPACE' ? theme.text : theme.backgroundElement }
-              ]}
-              onPress={() => setActiveTab('WORKSPACE')}
-            >
-              <Ionicons name="briefcase-outline" size={15} color={activeTab === 'WORKSPACE' ? theme.background : theme.text} />
-              <ThemedText style={{ color: activeTab === 'WORKSPACE' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
-                Workspace
-              </ThemedText>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                { backgroundColor: activeTab === 'EVENTS' ? theme.text : theme.backgroundElement }
-              ]}
-              onPress={() => setActiveTab('EVENTS')}
-            >
-              <Ionicons name="calendar-outline" size={15} color={activeTab === 'EVENTS' ? theme.background : theme.text} />
-              <ThemedText style={{ color: activeTab === 'EVENTS' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
-                Events
-              </ThemedText>
-            </TouchableOpacity>
+          {selectedMenu === null ? (
+            <ThemedView style={styles.menuContainer}>
+              <TouchableOpacity
+                style={[styles.menuRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+                onPress={() => setSelectedMenu('WORKSPACE')}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(93, 9, 33, 0.08)' }]}>
+                    <Ionicons name="briefcase" size={20} color="#5D0921" />
+                  </View>
+                  <View style={styles.menuTexts}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Workspace Settings</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Manage wedding date, name & collaborators</ThemedText>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                { backgroundColor: activeTab === 'CATEGORIES' ? theme.text : theme.backgroundElement }
-              ]}
-              onPress={() => setActiveTab('CATEGORIES')}
-            >
-              <Ionicons name="pricetags-outline" size={15} color={activeTab === 'CATEGORIES' ? theme.background : theme.text} />
-              <ThemedText style={{ color: activeTab === 'CATEGORIES' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
-                Categories
-              </ThemedText>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+                onPress={() => setSelectedMenu('EVENTS')}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(233, 30, 99, 0.08)' }]}>
+                    <Ionicons name="calendar" size={20} color="#E91E63" />
+                  </View>
+                  <View style={styles.menuTexts}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Events Timeline</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Add/edit wedding functions and schedules</ThemedText>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                { backgroundColor: activeTab === 'NOTES' ? theme.text : theme.backgroundElement }
-              ]}
-              onPress={() => setActiveTab('NOTES')}
-            >
-              <Ionicons name="document-text-outline" size={15} color={activeTab === 'NOTES' ? theme.background : theme.text} />
-              <ThemedText style={{ color: activeTab === 'NOTES' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
-                Notes
-              </ThemedText>
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+                onPress={() => setSelectedMenu('CATEGORIES')}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(156, 39, 176, 0.08)' }]}>
+                    <Ionicons name="pricetags" size={20} color="#9C27B0" />
+                  </View>
+                  <View style={styles.menuTexts}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Budget Categories</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Configure task and expense categories</ThemedText>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.segmentBtn,
-                { backgroundColor: activeTab === 'DOCUMENTS' ? theme.text : theme.backgroundElement }
-              ]}
-              onPress={() => setActiveTab('DOCUMENTS')}
-            >
-              <Ionicons name="document-attach-outline" size={15} color={activeTab === 'DOCUMENTS' ? theme.background : theme.text} />
-              <ThemedText style={{ color: activeTab === 'DOCUMENTS' ? theme.background : theme.text, fontSize: 13, fontWeight: 'bold' }}>
-                Documents
-              </ThemedText>
-            </TouchableOpacity>
-          </ScrollView>
+              <TouchableOpacity
+                style={[styles.menuRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+                onPress={() => setSelectedMenu('NOTES')}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(76, 175, 80, 0.08)' }]}>
+                    <Ionicons name="document-text" size={20} color="#4CAF50" />
+                  </View>
+                  <View style={styles.menuTexts}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>Planner Notes</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Save notes, vendors list, and references</ThemedText>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
 
-          {/* Conditional rendering based on segment selection */}
-          {activeTab === 'WORKSPACE' && (
-            <ThemedView style={{ gap: Spacing.four }}>
-              {/* Current Workspace Info */}
-              {currentWorkspace ? (
-                <ThemedView type="backgroundElement" style={styles.card}>
-                  <ThemedText type="smallBold" style={styles.sectionTitle}>Active Workspace</ThemedText>
-                  <ThemedView style={styles.detailRow}>
-                    <ThemedText type="default">Name:</ThemedText>
-                    <ThemedText type="smallBold">{currentWorkspace.name}</ThemedText>
-                  </ThemedView>
-                  <ThemedView style={styles.detailRow}>
-                    <ThemedText type="default">Wedding Date:</ThemedText>
-                    <ThemedText type="smallBold">
-                      {new Date(currentWorkspace.weddingDate).toLocaleDateString()}
-                    </ThemedText>
-                  </ThemedView>
-                  <ThemedView style={styles.detailRow}>
-                    <ThemedText type="default">My Role:</ThemedText>
-                    <ThemedText type="smallBold" style={{ textTransform: 'capitalize' }}>
-                      {currentWorkspace.role}
-                    </ThemedText>
-                  </ThemedView>
+              <TouchableOpacity
+                style={[styles.menuRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+                onPress={() => setSelectedMenu('DOCUMENTS')}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(33, 150, 243, 0.08)' }]}>
+                    <Ionicons name="document-attach" size={20} color="#2196F3" />
+                  </View>
+                  <View style={styles.menuTexts}>
+                    <ThemedText type="smallBold" style={{ color: theme.text }}>All Documents</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Upload receipts, contracts, and proposals</ThemedText>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.outlineButton, { borderColor: theme.text }]}
-                    onPress={() => {
-                      setCurrentWorkspace(null);
-                      router.replace('/');
-                    }}
-                  >
-                    <ThemedText style={{ color: theme.text, fontWeight: 'bold' }}>
-                      Switch Workspace
-                    </ThemedText>
-                  </TouchableOpacity>
-                </ThemedView>
-              ) : (
-                <ThemedView type="backgroundElement" style={styles.card}>
-                  <ThemedText type="smallBold" style={styles.sectionTitle}>No Active Workspace</ThemedText>
-                  <ThemedText type="default" style={styles.placeholderText}>
-                    Select or create a workspace on the dashboard to access full features.
-                  </ThemedText>
-                  <TouchableOpacity
-                    style={[styles.outlineButton, { borderColor: theme.text }]}
-                    onPress={() => router.replace('/')}
-                  >
-                    <ThemedText style={{ color: theme.text, fontWeight: 'bold' }}>
-                      Go to Workspaces
-                    </ThemedText>
-                  </TouchableOpacity>
-                </ThemedView>
-              )}
+              <View style={{ height: Spacing.four }} />
 
-              {/* Invite Collaborator Section */}
-              {currentWorkspace && isOwner && (
-                <ThemedView type="backgroundElement" style={styles.card}>
-                  <ThemedText type="smallBold" style={styles.sectionTitle}>Invite Collaborator</ThemedText>
-                  <ThemedView style={styles.form}>
-                    <ThemedView style={styles.inputWrapper}>
-                      <ThemedText type="smallBold">Phone Number</ThemedText>
-                      <TextInput
-                        style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-                        placeholder="e.g. +1234567890"
-                        placeholderTextColor={theme.textSecondary}
-                        value={invitePhone}
-                        onChangeText={setInvitePhone}
-                        keyboardType="phone-pad"
-                      />
-                    </ThemedView>
+              <TouchableOpacity
+                style={[styles.menuRow, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
+                onPress={handleLogout}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(244, 67, 54, 0.08)' }]}>
+                    <Ionicons name="log-out" size={20} color="#F44336" />
+                  </View>
+                  <View style={styles.menuTexts}>
+                    <ThemedText type="smallBold" style={{ color: '#F44336' }}>Logout</ThemedText>
+                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Sign out of your account</ThemedText>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color="#F44336" />
+              </TouchableOpacity>
+            </ThemedView>
+          ) : (
+            <View>
+              {/* Back Header */}
+              <TouchableOpacity
+                style={styles.backHeader}
+                onPress={() => setSelectedMenu(null)}
+              >
+                <Ionicons name="chevron-back" size={20} color="#E91E63" />
+                <ThemedText style={styles.backText}>Back to Settings</ThemedText>
+              </TouchableOpacity>
 
-                    <ThemedView style={styles.inputWrapper}>
-                      <ThemedText type="smallBold">Role</ThemedText>
-                      <ThemedView style={styles.roleContainer}>
-                        <TouchableOpacity
-                          style={[
-                            styles.roleSelectBtn,
-                            {
-                              backgroundColor: inviteRole === 'EDITOR' ? theme.text : theme.background,
-                              borderColor: theme.text,
-                            },
-                          ]}
-                          onPress={() => setInviteRole('EDITOR')}
-                        >
-                          <ThemedText style={{ color: inviteRole === 'EDITOR' ? theme.background : theme.text }}>
-                            Editor
-                          </ThemedText>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[
-                            styles.roleSelectBtn,
-                            {
-                              backgroundColor: inviteRole === 'VIEWER' ? theme.text : theme.background,
-                              borderColor: theme.text,
-                            },
-                          ]}
-                          onPress={() => setInviteRole('VIEWER')}
-                        >
-                          <ThemedText style={{ color: inviteRole === 'VIEWER' ? theme.background : theme.text }}>
-                            Viewer
-                          </ThemedText>
-                        </TouchableOpacity>
+              {selectedMenu === 'WORKSPACE' && (
+                <ThemedView style={{ gap: Spacing.four }}>
+                  {/* Current Workspace Info */}
+                  {currentWorkspace ? (
+                    <ThemedView type="backgroundElement" style={styles.card}>
+                      <ThemedText type="smallBold" style={styles.sectionTitle}>Active Workspace</ThemedText>
+                      <ThemedView style={styles.detailRow}>
+                        <ThemedText type="default">Name:</ThemedText>
+                        <ThemedText type="smallBold">{currentWorkspace.name}</ThemedText>
                       </ThemedView>
-                    </ThemedView>
-
-                    <ThemedView style={styles.inputWrapper}>
-                      <ThemedText type="smallBold">Budget Limit (Optional)</ThemedText>
-                      <TextInput
-                        style={[styles.input, { backgroundColor: theme.background, color: theme.text }]}
-                        placeholder="e.g. 50000"
-                        placeholderTextColor={theme.textSecondary}
-                        value={allocatedBudget}
-                        onChangeText={setAllocatedBudget}
-                        keyboardType="numeric"
-                      />
-                    </ThemedView>
-
-                    <ThemedView style={styles.inputWrapper}>
-                      <ThemedText type="smallBold">Allowed Sections (Module Access)</ThemedText>
-                      <ThemedView style={styles.checkboxContainer}>
-                        {['Expenses', 'Tasks', 'Events', 'Documents', 'Notes', 'Budget'].map((mod) => {
-                          const isChecked = selectedModules.includes(mod);
-                          return (
-                            <TouchableOpacity
-                              key={mod}
-                              style={[
-                                styles.checkboxBtn,
-                                {
-                                  borderColor: isChecked ? theme.text : theme.border,
-                                  backgroundColor: isChecked ? 'rgba(233, 30, 99, 0.08)' : 'transparent',
-                                },
-                              ]}
-                              onPress={() => {
-                                if (isChecked) {
-                                  setSelectedModules(selectedModules.filter(m => m !== mod));
-                                } else {
-                                  setSelectedModules([...selectedModules, mod]);
-                                }
-                              }}
-                            >
-                              <Ionicons
-                                name={isChecked ? 'checkbox-outline' : 'square-outline'}
-                                size={14}
-                                color={isChecked ? theme.text : theme.textSecondary}
-                              />
-                              <ThemedText style={{ fontSize: 12, color: isChecked ? theme.text : theme.textSecondary }}>
-                                {mod}
-                              </ThemedText>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ThemedView>
-                    </ThemedView>
-
-                    <TouchableOpacity
-                      style={[styles.button, { backgroundColor: theme.text }]}
-                      onPress={handleSendInvite}
-                      disabled={sendInviteMutation.isPending}
-                    >
-                      {sendInviteMutation.isPending ? (
-                        <ActivityIndicator color={theme.background} />
-                      ) : (
-                        <ThemedText style={{ color: theme.background, fontWeight: 'bold' }}>
-                          Send Invitation
+                      <ThemedView style={styles.detailRow}>
+                        <ThemedText type="default">Wedding Date:</ThemedText>
+                        <ThemedText type="smallBold">
+                          {new Date(currentWorkspace.weddingDate).toLocaleDateString()}
                         </ThemedText>
-                      )}
-                    </TouchableOpacity>
-                  </ThemedView>
-                </ThemedView>
-              )}
+                      </ThemedView>
+                      <ThemedView style={styles.detailRow}>
+                        <ThemedText type="default">My Role:</ThemedText>
+                        <ThemedText type="smallBold" style={{ textTransform: 'capitalize' }}>
+                          {currentWorkspace.role}
+                        </ThemedText>
+                      </ThemedView>
 
-              {/* Workspace Members & Invitations Section */}
-              {currentWorkspace && (
-                <ThemedView type="backgroundElement" style={styles.card}>
-                  <ThemedText type="smallBold" style={styles.sectionTitle}>Workspace Members & Invites</ThemedText>
-                  
+                      <TouchableOpacity
+                        style={[styles.outlineButton, { borderColor: theme.text }]}
+                        onPress={() => {
+                          setCurrentWorkspace(null);
+                          router.replace('/');
+                        }}
+                      >
+                        <ThemedText style={{ color: theme.text, fontWeight: 'bold' }}>
+                          Switch Workspace
+                        </ThemedText>
+                      </TouchableOpacity>
+                    </ThemedView>
+                  ) : (
+                    <ThemedView type="backgroundElement" style={styles.card}>
+                      <ThemedText type="smallBold" style={styles.sectionTitle}>No Active Workspace</ThemedText>
+                      <ThemedText type="default" style={styles.placeholderText}>
+                        Select or create a workspace on the dashboard to access full features.
+                      </ThemedText>
+                      <TouchableOpacity
+                        style={[styles.outlineButton, { borderColor: theme.text }]}
+                        onPress={() => router.replace('/')}
+                      >
+                        <ThemedText style={{ color: theme.text, fontWeight: 'bold' }}>
+                          Go to Workspaces
+                        </ThemedText>
+                      </TouchableOpacity>
+                    </ThemedView>
+                  )}
+
                   {membersLoading ? (
                     <ActivityIndicator size="small" color={theme.text} />
                   ) : (
@@ -737,8 +652,6 @@ export default function MoreScreen() {
                       </ThemedView>
                     </ThemedView>
                   </Modal>
-                </ThemedView>
-              )}
 
               {/* Edit Workspace details */}
               {currentWorkspace && isOwnerOrEditor && (
@@ -869,15 +782,17 @@ export default function MoreScreen() {
             </ThemedView>
           )}
 
-          {activeTab === 'EVENTS' && (
+          {selectedMenu === 'EVENTS' && (
             <EventsTab initialMode={action === 'create' ? 'CREATE' : 'LIST'} />
           )}
 
-          {activeTab === 'CATEGORIES' && <CategoriesTab />}
+          {selectedMenu === 'CATEGORIES' && <CategoriesTab />}
 
-          {activeTab === 'NOTES' && <NotesTab />}
+          {selectedMenu === 'NOTES' && <NotesTab />}
 
-          {activeTab === 'DOCUMENTS' && <DocumentsScreen nested={true} />}
+          {selectedMenu === 'DOCUMENTS' && <DocumentsScreen nested={true} />}
+            </View>
+          )}
         </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -886,6 +801,44 @@ export default function MoreScreen() {
 }
 
 const styles = StyleSheet.create({
+  menuContainer: {
+    gap: Spacing.three,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: Spacing.three,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  menuIconContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTexts: {
+    gap: 2,
+  },
+  backHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.one,
+    marginBottom: Spacing.three,
+    paddingVertical: Spacing.one,
+  },
+  backText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#E91E63',
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
