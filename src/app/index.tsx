@@ -12,6 +12,7 @@ import {
   Animated,
   TextInput,
   RefreshControl,
+  Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -483,7 +484,7 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
             <ThemedText
-              style={[styles.largeBudgetValue, { color: theme.text }]}
+              style={[styles.largeBudgetValue, {lineHeight: 36, color: theme.text }]}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
@@ -1454,7 +1455,7 @@ const styles = StyleSheet.create({
   largeBudgetValue: {
     fontSize: 30,
     fontWeight: 'bold',
-    marginVertical: 6,
+    marginVertical: 2,
   },
   splitProgressBarBg: {
     height: 12,
