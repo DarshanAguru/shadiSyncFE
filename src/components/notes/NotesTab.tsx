@@ -31,6 +31,12 @@ export default function NotesTab() {
   const currentWorkspace = useWorkspaceStore((state) => state.currentWorkspace);
   const { showToast } = useToastStore();
 
+  // for debouncing
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // latest note content for dynamic ui updates
+  const latestChecklistContent = React.useRef<Record<string, string>>({});
+
   // States
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -41,7 +47,6 @@ export default function NotesTab() {
   const [content, setContent] = useState('');
   const [isPinned, setIsPinned] = useState(false);
   const [noteType, setNoteType] = useState<'NOTE' | 'CHECKLIST'>('NOTE');
-
   // Queries
   const { data: notesData, isLoading, refetch } = useNotes(currentWorkspace?.id, searchQuery);
 
@@ -71,7 +76,7 @@ export default function NotesTab() {
       // clean lines for user edit (removing [ ] or [x] markers)
       const userLines = rawLines.map(line => {
         if (line.startsWith('[ ]') || line.startsWith('[x]')) {
-          return line.substring(3).trim();
+          return (line.startsWith('[x]'))? `- ${line.substring(3).trim()}` :line.substring(3).trim();
         }
         return line;
       });
@@ -93,12 +98,19 @@ export default function NotesTab() {
     // Format content if checklist
     let finalContent = content.trim();
     if (noteType === 'CHECKLIST') {
-      const processed = content.split('\n').map(line => {
-        const trimmed = line.trim();
-        if (!trimmed) return '';
-        if (trimmed.startsWith('[ ]') || trimmed.startsWith('[x]')) return trimmed;
-        return `[ ] ${trimmed}`;
-      }).filter(Boolean).join('\n');
+      const processed = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => {
+        if (line.startsWith("-")) {
+          return `[x] ${line.substring(2).trim()}`
+        }
+        if (line.startsWith('[ ]') || line.startsWith('[x]')) return line;
+        return `[ ] ${line}`;
+      })
+      .sort((a, b) => a.localeCompare(b))
+      .join('\n');
       finalContent = `[CHECKLIST]\n${processed}`;
     }
 
@@ -132,9 +144,33 @@ export default function NotesTab() {
     }
   };
 
+
+  const debounceCheckList  = (note: NoteItem, newContent: string) => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    timeoutRef.current = setTimeout(async () => {
+      try{
+        await updateMutation.mutateAsync({
+        id: note.id,
+        workspaceId: currentWorkspace!.id,
+        title: note.title,
+        content: newContent,
+        isPinned: note.is_pinned,
+      });
+      delete latestChecklistContent.current[note.id];
+      }catch (err: any) {
+      showToast('Error', err.message || 'Failed to toggle item', 'error');
+    }
+    }, 500);
+
+  }
+
   const handleToggleChecklistItem = async (note: NoteItem, lineIndex: number) => {
     if (!currentWorkspace) return;
-    const lines = note.content.split('\n');
+    const currentContent = latestChecklistContent.current[note.id] ?? note.content;
+    const lines = currentContent.split('\n');
     const targetLine = lines[lineIndex];
     if (targetLine.startsWith('[ ]')) {
       lines[lineIndex] = targetLine.replace('[ ]', '[x]');
@@ -144,17 +180,8 @@ export default function NotesTab() {
       lines[lineIndex] = `[x] ${targetLine}`;
     }
     const newContent = lines.join('\n');
-    try {
-      await updateMutation.mutateAsync({
-        id: note.id,
-        workspaceId: currentWorkspace.id,
-        title: note.title,
-        content: newContent,
-        isPinned: note.is_pinned,
-      });
-    } catch (err: any) {
-      showToast('Error', err.message || 'Failed to toggle item', 'error');
-    }
+    latestChecklistContent.current[note.id] = newContent;
+    debounceCheckList(note, newContent);
   };
 
   const handleTogglePin = async (note: NoteItem) => {
