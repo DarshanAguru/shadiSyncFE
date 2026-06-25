@@ -1023,9 +1023,10 @@ const styles = StyleSheet.create({
     gap: Spacing.one,
   },
   input: {
-    height: 40,
-    borderRadius: 8,
-    paddingHorizontal: Spacing.two,
+    minHeight: 48,
+    borderRadius: 10,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 12,
     fontSize: 15,
   },
   button: {

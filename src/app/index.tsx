@@ -788,7 +788,7 @@ export default function DashboardScreen() {
                     <ThemedView style={styles.inputWrapper}>
                       <ThemedText type="smallBold">Title</ThemedText>
                       <TextInput
-                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, minHeight: 48, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: theme.border }}
                         value={eventTitle}
                         onChangeText={setEventTitle}
                         placeholder="e.g. Reception Dinner"
@@ -813,7 +813,7 @@ export default function DashboardScreen() {
                       <ThemedText type="smallBold">Start Time</ThemedText>
                       <View style={{ flexDirection: 'row', gap: Spacing.two }}>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, minHeight: 48, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border }}
                           onPress={() => setShowStartPicker('date')}
                         >
                           <ThemedText style={{ color: theme.text }}>
@@ -821,7 +821,7 @@ export default function DashboardScreen() {
                           </ThemedText>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, minHeight: 48, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border }}
                           onPress={() => setShowStartPicker('time')}
                         >
                           <ThemedText style={{ color: theme.text }}>
@@ -865,7 +865,7 @@ export default function DashboardScreen() {
                       <ThemedText type="smallBold">End Time</ThemedText>
                       <View style={{ flexDirection: 'row', gap: Spacing.two }}>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, minHeight: 48, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border }}
                           onPress={() => setShowEndPicker('date')}
                         >
                           <ThemedText style={{ color: theme.text }}>
@@ -873,7 +873,7 @@ export default function DashboardScreen() {
                           </ThemedText>
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, height: 40, borderRadius: 8, justifyContent: 'center', paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                          style={{ flex: 1, backgroundColor: theme.backgroundSelected, minHeight: 48, borderRadius: 10, justifyContent: 'center', paddingHorizontal: 12, borderWidth: 1, borderColor: theme.border }}
                           onPress={() => setShowEndPicker('time')}
                         >
                           <ThemedText style={{ color: theme.text }}>
@@ -916,7 +916,7 @@ export default function DashboardScreen() {
                     <ThemedView style={styles.inputWrapper}>
                       <ThemedText type="smallBold">Location</ThemedText>
                       <TextInput
-                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, height: 40, borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: theme.border }}
+                        style={{ backgroundColor: theme.backgroundSelected, color: theme.text, minHeight: 48, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, borderWidth: 1, borderColor: theme.border }}
                         value={eventLocation}
                         onChangeText={setEventLocation}
                         placeholder="Venue location..."
@@ -926,7 +926,7 @@ export default function DashboardScreen() {
 
                     <View style={{ flexDirection: 'row', gap: Spacing.two, marginTop: Spacing.two }}>
                       <TouchableOpacity
-                        style={{ flex: 1, height: 40, borderRadius: 8, backgroundColor: '#E91E63', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ flex: 1, minHeight: 48, borderRadius: 10, backgroundColor: '#E91E63', alignItems: 'center', justifyContent: 'center' }}
                         onPress={handleSaveEvent}
                         disabled={updateEventMutation.isPending}
                       >
@@ -938,7 +938,7 @@ export default function DashboardScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={{ flex: 1, height: 40, borderRadius: 8, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ flex: 1, minHeight: 48, borderRadius: 10, backgroundColor: '#FF3B30', alignItems: 'center', justifyContent: 'center' }}
                         onPress={handleDeleteEvent}
                         disabled={deleteEventMutation.isPending}
                       >
@@ -950,7 +950,7 @@ export default function DashboardScreen() {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={{ flex: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
+                        style={{ flex: 1, minHeight: 48, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' }}
                         onPress={() => setIsEditingEvent(false)}
                       >
                         <ThemedText style={{ color: theme.text }}>Cancel</ThemedText>
@@ -1423,15 +1423,15 @@ const styles = StyleSheet.create({
   card: {
     marginHorizontal: Spacing.three,
     padding: Spacing.four,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EADFD9',
-    gap: Spacing.two,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: Spacing.three,
+    shadowColor: '#5D0921',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
   widgetHeaderRow: {
     flexDirection: 'row',
@@ -1439,7 +1439,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   widgetTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
   },
   viewAllText: {
@@ -1448,20 +1448,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   largeBudgetValue: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    marginVertical: 4,
+    marginVertical: 6,
+    letterSpacing: 0.5,
   },
   splitProgressBarBg: {
-    height: 8,
-    borderRadius: 4,
+    height: 12,
+    borderRadius: 6,
     backgroundColor: '#4CAF50',
     overflow: 'hidden',
-    marginTop: 4,
+    marginTop: 6,
   },
   splitProgressBarSpent: {
     height: '100%',
     backgroundColor: '#E91E63',
+    borderRadius: 6,
   },
   budgetLegendRow: {
     flexDirection: 'row',
@@ -1473,19 +1475,21 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 6,
   },
   legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   legendLabel: {
-    fontSize: 11,
-    opacity: 0.6,
+    fontSize: 12,
+    opacity: 0.65,
   },
   legendValue: {
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '600',
   },
   sectionWrapper: {
     gap: Spacing.two,
@@ -1497,7 +1501,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.three,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
   },
   eventsScrollView: {
@@ -1507,28 +1511,30 @@ const styles = StyleSheet.create({
   },
   eventProgressCard: {
     padding: Spacing.three,
-    borderRadius: 14,
-    width: 130,
+    borderRadius: 16,
+    width: 140,
     borderWidth: 1,
     alignItems: 'center',
-    gap: 4,
-    shadowColor: '#000',
+    gap: 6,
+    shadowColor: '#5D0921',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
   eventCardTitle: {
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
+    lineHeight: 18,
   },
   eventCardDate: {
-    fontSize: 11,
+    fontSize: 12,
+    opacity: 0.7,
   },
   eventCardRatio: {
-    fontSize: 11,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '600',
   },
   circularIndicatorWrapper: {
     marginTop: Spacing.two,
@@ -1536,15 +1542,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   circleIndicatorBorder: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
   circleIndicatorText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   tasksSummaryRow: {
@@ -1560,19 +1566,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   progressBarBg: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.07)',
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 4,
+    borderRadius: 6,
   },
   stackedSegmentBar: {
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: 'rgba(0,0,0,0.05)',
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.07)',
     overflow: 'hidden',
     flexDirection: 'row',
     marginVertical: Spacing.two,

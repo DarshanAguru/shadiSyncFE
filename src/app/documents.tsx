@@ -569,20 +569,6 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
             </ThemedView>
 
           </ScrollView>
-          {canCreate && (
-            <TouchableOpacity
-              style={[styles.fabButton, { backgroundColor: '#E91E63' }]}
-              onPress={handleUploadFile}
-              disabled={isUploading}
-              activeOpacity={0.8}
-            >
-              {isUploading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <Ionicons name="document-attach" size={24} color="#FFFFFF" />
-              )}
-            </TouchableOpacity>
-          )}
         </WorkspaceGuard>
       </ContainerView>
     </ThemedView>
