@@ -482,7 +482,11 @@ export default function DashboardScreen() {
                 <Ionicons name="chevron-forward" size={14} color="#E91E63" />
               </View>
             </TouchableOpacity>
-            <ThemedText style={[styles.largeBudgetValue, { color: theme.text }]}>
+            <ThemedText
+              style={[styles.largeBudgetValue, { color: theme.text }]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+            >
               {allocated > 0 ? `₹${allocated.toLocaleString('en-IN')}` : 'No Budget Set'}
             </ThemedText>
             
@@ -507,14 +511,14 @@ export default function DashboardScreen() {
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, { backgroundColor: '#E91E63' }]} />
                     <ThemedText type="small" style={[styles.legendLabel, { color: theme.textSecondary }]}>Spent</ThemedText>
-                    <ThemedText type="smallBold" style={[styles.legendValue, { color: theme.text }]}>
+                    <ThemedText type="smallBold" style={[styles.legendValue, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>
                       ₹{totalSpent.toLocaleString('en-IN')} ({budgetPercent}%)
                     </ThemedText>
                   </View>
                   <View style={styles.legendItem}>
                     <View style={[styles.legendDot, { backgroundColor: '#4CAF50' }]} />
                     <ThemedText type="small" style={[styles.legendLabel, { color: theme.textSecondary }]}>Remaining</ThemedText>
-                    <ThemedText type="smallBold" style={[styles.legendValue, { color: '#4CAF50' }]}>
+                    <ThemedText type="smallBold" style={[styles.legendValue, { color: '#4CAF50' }]} numberOfLines={1} adjustsFontSizeToFit>
                       ₹{remaining.toLocaleString('en-IN')} ({Math.max(100 - budgetPercent, 0)}%)
                     </ThemedText>
                   </View>
@@ -1448,10 +1452,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   largeBudgetValue: {
-    fontSize: 32,
+    fontSize: 30,
     fontWeight: 'bold',
     marginVertical: 6,
-    letterSpacing: 0.5,
   },
   splitProgressBarBg: {
     height: 12,
@@ -1466,30 +1469,31 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   budgetLegendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     marginTop: Spacing.two,
-    gap: Spacing.two,
+    gap: Spacing.one,
   },
   legendItem: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 6,
+    flexWrap: 'nowrap',
   },
   legendDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
+    flexShrink: 0,
   },
   legendLabel: {
     fontSize: 12,
     opacity: 0.65,
+    flexShrink: 0,
   },
   legendValue: {
     fontSize: 12,
     fontWeight: '600',
+    flex: 1,
   },
   sectionWrapper: {
     gap: Spacing.two,
