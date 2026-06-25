@@ -68,10 +68,54 @@ export function useRegisterPushToken() {
 }
 
 /**
- * Utility to request permission and retrieve Expo Push Token.
- * Falls back to a mock token on simulator/web for developer convenience.
+ * Requests notification permissions and retrieves the real Expo Push Token.
+ * Returns null gracefully on simulators, permission denial, or missing Firebase config.
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
-  console.log('Using in-house notification manager: bypassing native FCM/Expo push token registration.');
-  return 'ExponentPushToken[mock_in_house_token]';
+  if (!Device.isDevice) {
+    console.log('[Push] Running on simulator — skipping push token registration.');
+    return null;
+  }
+
+  try {
+    // Request permission
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+
+    if (finalStatus !== 'granted') {
+      console.warn('[Push] Notification permission denied by user.');
+      return null;
+    }
+
+    // Android requires a notification channel
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'ShadiSync Notifications',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#E91E63',
+      });
+    }
+
+    // Get the real Expo push token
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+    const tokenData = await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
+    console.log('[Push] Expo Push Token:', tokenData.data);
+    return tokenData.data;
+  } catch (err: any) {
+    // Firebase not configured yet (missing google-services.json / FCM credentials).
+    // The in-app notification tray still works via the backend DB — this is non-fatal.
+    console.warn(
+      '[Push] Could not obtain push token. To enable OS-level push notifications, ' +
+      'configure google-services.json and FCM credentials per ' +
+      'https://docs.expo.dev/push-notifications/fcm-credentials/\n' +
+      'Error:', err?.message ?? err
+    );
+    return null;
+  }
 }

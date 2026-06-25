@@ -284,8 +284,8 @@ export default function MoreScreen() {
                 onPress={() => setSelectedMenu('WORKSPACE')}
               >
                 <View style={styles.menuLeft}>
-                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(93, 9, 33, 0.08)' }]}>
-                    <Ionicons name="briefcase" size={20} color="#5D0921" />
+                  <View style={[styles.menuIconContainer, { backgroundColor: 'rgba(233, 30, 99, 0.08)' }]}>
+                    <Ionicons name="briefcase" size={20} color="#E91E63" />
                   </View>
                   <View style={styles.menuTexts}>
                     <ThemedText type="smallBold" style={{ color: theme.text }}>Workspace Settings</ThemedText>

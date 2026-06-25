@@ -3,6 +3,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   ActivityIndicator,
   View,
   Image,
@@ -40,6 +41,18 @@ import { useUpdateWorkspace, useWorkspaces } from '@/hooks/useWorkspaces';
 import * as DocumentPicker from 'expo-document-picker';
 import { useToastStore } from '@/stores/toastStore';
 import { apiRequest, apiUploadRequest } from '@/utils/api';
+import * as Notifications from 'expo-notifications';
+
+// Show push alerts even when the app is foregrounded
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 const resolveFileUrl = (url: string) => {
   if (!url) return '';
@@ -57,6 +70,28 @@ export default function DashboardScreen() {
   const { currentWorkspace, setCurrentWorkspace } = useWorkspaceStore();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [showQuickActions, setShowQuickActions] = useState(false);
+
+  const hasGranularPermission = (moduleName: string, action: 'view' | 'create' | 'edit' | 'delete') => {
+    if (!currentWorkspace) return true;
+    const role = currentWorkspace.role;
+    const permissions = currentWorkspace.permissions as any;
+
+    if (permissions && permissions[moduleName]) {
+      const hasAction = permissions[moduleName][action];
+      if (typeof hasAction === 'boolean') {
+        return hasAction;
+      }
+    }
+
+    if (!role) return false;
+    if (role === 'OWNER' || role === 'EDITOR') {
+      return true;
+    }
+    if (role === 'VIEWER') {
+      return action === 'view';
+    }
+    return false;
+  };
 
   const [budgetAnim] = useState(new Animated.Value(0));
   const [tasksAnim] = useState(new Animated.Value(0));
@@ -84,7 +119,7 @@ export default function DashboardScreen() {
       const formData = new FormData();
       formData.append('workspaceId', currentWorkspace.id);
       formData.append('folderId', 'root');
-      
+
       if (Platform.OS === 'web') {
         if ((asset as any).file) {
           formData.append('file', (asset as any).file, asset.name || 'cover_image.jpg');
@@ -236,7 +271,7 @@ export default function DashboardScreen() {
     }
   };
 
-  // Push notifications registration
+  // Push notifications registration + foreground listener
   useEffect(() => {
     registerForPushNotificationsAsync()
       .then((token) => {
@@ -245,6 +280,12 @@ export default function DashboardScreen() {
         }
       })
       .catch((err) => console.error('Error fetching Expo Push Token:', err));
+
+    // Refresh in-app notification list whenever a push arrives while app is open
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      refetchNotifications();
+    });
+    return () => subscription.remove();
   }, []);
 
   // 1. Budget Calculations (Completely Dynamic)
@@ -372,12 +413,18 @@ export default function DashboardScreen() {
     const total = evtTasks.length;
     const completed = evtTasks.filter((t) => t.status === 'Completed').length;
     const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+    // Calculate event-specific spending
+    const eventExpenses = expenses.filter((exp) => exp.event_title === evt.title);
+    const eventSpentTotal = eventExpenses.reduce((sum, exp) => sum + Number(exp.amount), 0);
+
     return {
       id: evt.id,
       title: evt.title,
       date: safeFormatDate(evt.start_time, { day: 'numeric', month: 'short' }),
       tasksRatio: `${completed}/${total}`,
       percent,
+      eventSpentTotal,
     };
   });
 
@@ -413,7 +460,7 @@ export default function DashboardScreen() {
             />
           }
         >
-          
+
           {/* TOP HEADER CARD (Deep Maroon, Wedding Theme) */}
           <View style={[styles.weddingHeaderCard, { backgroundColor: '#5D0921' }]}>
             <View style={styles.headerTopRow}>
@@ -471,7 +518,7 @@ export default function DashboardScreen() {
           )}
 
           {/* 1. Widget: Budget Summary */}
-          <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
+          {hasGranularPermission('Budget', 'view') && <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
             <TouchableOpacity
               style={styles.widgetHeaderRow}
               onPress={() => router.push('/expenses')}
@@ -484,13 +531,13 @@ export default function DashboardScreen() {
               </View>
             </TouchableOpacity>
             <ThemedText
-              style={[styles.largeBudgetValue, {lineHeight: 36, color: theme.text }]}
+              style={[styles.largeBudgetValue, { lineHeight: 36, color: theme.text }]}
               numberOfLines={1}
               adjustsFontSizeToFit
             >
               {allocated > 0 ? `₹${allocated.toLocaleString('en-IN')}` : 'No Budget Set'}
             </ThemedText>
-            
+
             {allocated > 0 ? (
               <>
                 {/* Split Progress Bar (Pink for Spent, Green for Remaining) */}
@@ -530,9 +577,9 @@ export default function DashboardScreen() {
                 Define your wedding budget allocation in the Expenses tab.
               </ThemedText>
             )}
-          </ThemedView>
+          </ThemedView>}
 
-          <View style={styles.sectionWrapper}>
+          {hasGranularPermission('Events', 'view') && <View style={styles.sectionWrapper}>
             <TouchableOpacity
               style={styles.sectionHeaderRow}
               onPress={() => router.push('/more?tab=EVENTS')}
@@ -544,7 +591,7 @@ export default function DashboardScreen() {
                 <Ionicons name="chevron-forward" size={14} color="#E91E63" />
               </View>
             </TouchableOpacity>
-            
+
             {eventsList.length === 0 ? (
               <View style={[styles.emptyWidgetState, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
                 <Ionicons name="calendar-outline" size={24} color={theme.textSecondary} />
@@ -569,7 +616,10 @@ export default function DashboardScreen() {
                       <ThemedText type="smallBold" style={[styles.eventCardTitle, { color: theme.text }]}>{evt.title}</ThemedText>
                       <ThemedText type="small" style={[styles.eventCardDate, { color: theme.textSecondary }]}>{evt.date}</ThemedText>
                       <ThemedText type="small" style={[styles.eventCardRatio, { color: theme.textSecondary }]}>{evt.tasksRatio} Tasks</ThemedText>
-                      
+                      <ThemedText type="smallBold" style={{ color: '#E91E63', fontSize: 12, marginTop: 2 }}>
+                        ₹{evt.eventSpentTotal.toLocaleString('en-IN')}
+                      </ThemedText>
+
                       {/* Circle progress ring simulation */}
                       <View style={styles.circularIndicatorWrapper}>
                         <View style={[styles.circleIndicatorBorder, { borderColor: theme.text, backgroundColor: theme.backgroundSelected }]}>
@@ -581,10 +631,10 @@ export default function DashboardScreen() {
                 ))}
               </ScrollView>
             )}
-          </View>
+          </View>}
 
           {/* 3. Widget: Tasks Progress */}
-          <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
+          {hasGranularPermission('Tasks', 'view') && <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
             <TouchableOpacity
               style={styles.widgetHeaderRow}
               onPress={() => router.push('/tasks')}
@@ -596,7 +646,7 @@ export default function DashboardScreen() {
                 <Ionicons name="chevron-forward" size={14} color="#E91E63" />
               </View>
             </TouchableOpacity>
-            
+
             {totalTasks > 0 ? (
               <>
                 <View style={styles.tasksSummaryRow}>
@@ -605,7 +655,7 @@ export default function DashboardScreen() {
                     {completedTasks}/{totalTasks} ({taskProgressPercent}%)
                   </ThemedText>
                 </View>
-                
+
                 <View style={styles.progressBarBg}>
                   <Animated.View
                     style={[
@@ -626,10 +676,10 @@ export default function DashboardScreen() {
                 No tasks available. Add checklists in the Tasks tab!
               </ThemedText>
             )}
-          </ThemedView>
+          </ThemedView>}
 
           {/* 4. Widget: Top Expense Categories */}
-          <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
+          {hasGranularPermission('Expenses', 'view') && <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
             <TouchableOpacity
               style={styles.widgetHeaderRow}
               onPress={() => router.push('/expenses')}
@@ -641,7 +691,7 @@ export default function DashboardScreen() {
                 <Ionicons name="chevron-forward" size={14} color="#E91E63" />
               </View>
             </TouchableOpacity>
-            
+
             {categorySpending.length === 0 ? (
               <View style={[styles.emptyWidgetState, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
                 <Ionicons name="pie-chart-outline" size={24} color={theme.textSecondary} style={{ marginBottom: 4 }} />
@@ -686,10 +736,10 @@ export default function DashboardScreen() {
                 </View>
               </>
             )}
-          </ThemedView>
+          </ThemedView>}
 
           {/* 5. Widget: Member Spending Summary */}
-          <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
+          {hasGranularPermission('Expenses', 'view') && <ThemedView type="backgroundElement" style={[styles.card, { borderColor: theme.border }]}>
             <TouchableOpacity
               style={styles.widgetHeaderRow}
               onPress={() => router.push('/expenses')}
@@ -701,7 +751,7 @@ export default function DashboardScreen() {
                 <Ionicons name="chevron-forward" size={14} color="#E91E63" />
               </View>
             </TouchableOpacity>
-            
+
             {memberSpending.length === 0 ? (
               <View style={[styles.emptyWidgetState, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
                 <Ionicons name="people-outline" size={24} color={theme.textSecondary} style={{ marginBottom: 4 }} />
@@ -714,14 +764,14 @@ export default function DashboardScreen() {
                 {memberSpending.map((member) => {
                   const proportion = member.amount / maxMemberSpent;
                   const initials = member.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
-                  
+
                   return (
                     <View key={member.name} style={styles.memberSpendingRow}>
                       {/* User Profile Avatar with Initials */}
                       <View style={[styles.memberAvatar, { backgroundColor: theme.backgroundSelected, borderColor: theme.backgroundSelected }]}>
                         <ThemedText type="smallBold" style={[styles.avatarText, { color: theme.text }]}>{initials}</ThemedText>
                       </View>
-                      
+
                       <View style={styles.memberProgressWrapper}>
                         <View style={styles.memberNameRow}>
                           <ThemedText type="smallBold" style={[styles.memberName, { color: theme.text }]}>{member.name}</ThemedText>
@@ -729,7 +779,7 @@ export default function DashboardScreen() {
                             ₹{member.amount.toLocaleString('en-IN')}
                           </ThemedText>
                         </View>
-                        
+
                         {/* Bar indicator */}
                         <View style={styles.memberBarBg}>
                           <View
@@ -748,7 +798,7 @@ export default function DashboardScreen() {
                 })}
               </View>
             )}
-          </ThemedView>
+          </ThemedView>}
 
           {/* Footer Info */}
           <ThemedView style={styles.footer}>
@@ -1062,14 +1112,18 @@ export default function DashboardScreen() {
           </View>
         </Modal>
 
-        {/* Quick Actions FAB */}
-        <TouchableOpacity
-          style={[styles.fabButton, { backgroundColor: '#E91E63' }]}
-          onPress={() => setShowQuickActions(true)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add" size={28} color="#FFFFFF" />
-        </TouchableOpacity>
+        {/* Quick Actions FAB — only shown if user can create at least one thing */}
+        {(hasGranularPermission('Expenses', 'create') ||
+          hasGranularPermission('Tasks', 'create') ||
+          hasGranularPermission('Events', 'create')) && (
+            <TouchableOpacity
+              style={[styles.fabButton, { backgroundColor: '#E91E63' }]}
+              onPress={() => setShowQuickActions(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={28} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
 
         {/* Quick Actions Modal Overlay */}
         <Modal
@@ -1090,58 +1144,64 @@ export default function DashboardScreen() {
                   <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
-              
+
               <View style={styles.quickActionsList}>
-                <TouchableOpacity
-                  style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
-                  onPress={() => {
-                    setShowQuickActions(false);
-                    router.push('/expenses?action=create');
-                  }}
-                >
-                  <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(233, 30, 99, 0.1)' }]}>
-                    <Ionicons name="wallet-outline" size={22} color="#E91E63" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText type="smallBold" style={{ color: theme.text }}>Log Expense</ThemedText>
-                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Record wedding spending & receipts</ThemedText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
-                </TouchableOpacity>
+                {hasGranularPermission('Expenses', 'create') && (
+                  <TouchableOpacity
+                    style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => {
+                      setShowQuickActions(false);
+                      router.push('/expenses?action=create');
+                    }}
+                  >
+                    <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(233, 30, 99, 0.1)' }]}>
+                      <Ionicons name="wallet-outline" size={22} color="#E91E63" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold" style={{ color: theme.text }}>Log Expense</ThemedText>
+                      <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Record wedding spending & receipts</ThemedText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
-                  onPress={() => {
-                    setShowQuickActions(false);
-                    router.push('/tasks?action=create');
-                  }}
-                >
-                  <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
-                    <Ionicons name="checkbox-outline" size={22} color="#4CAF50" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText type="smallBold" style={{ color: theme.text }}>Add Checklist Task</ThemedText>
-                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Create tracking item for wedding planner</ThemedText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
-                </TouchableOpacity>
+                {hasGranularPermission('Tasks', 'create') && (
+                  <TouchableOpacity
+                    style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => {
+                      setShowQuickActions(false);
+                      router.push('/tasks?action=create');
+                    }}
+                  >
+                    <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(76, 175, 80, 0.1)' }]}>
+                      <Ionicons name="checkbox-outline" size={22} color="#4CAF50" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold" style={{ color: theme.text }}>Add Checklist Task</ThemedText>
+                      <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Create tracking item for wedding planner</ThemedText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
 
-                <TouchableOpacity
-                  style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
-                  onPress={() => {
-                    setShowQuickActions(false);
-                    router.push('/more?tab=EVENTS&action=create');
-                  }}
-                >
-                  <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(63, 81, 181, 0.1)' }]}>
-                    <Ionicons name="calendar-outline" size={22} color="#3F51B5" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <ThemedText type="smallBold" style={{ color: theme.text }}>Schedule Event</ThemedText>
-                    <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Add wedding timeline itinerary slot</ThemedText>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
-                </TouchableOpacity>
+                {hasGranularPermission('Events', 'create') && (
+                  <TouchableOpacity
+                    style={[styles.quickActionItem, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => {
+                      setShowQuickActions(false);
+                      router.push('/more?tab=EVENTS&action=create');
+                    }}
+                  >
+                    <View style={[styles.quickActionIconBg, { backgroundColor: 'rgba(63, 81, 181, 0.1)' }]}>
+                      <Ionicons name="calendar-outline" size={22} color="#3F51B5" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <ThemedText type="smallBold" style={{ color: theme.text }}>Schedule Event</ThemedText>
+                      <ThemedText type="small" style={{ color: theme.textSecondary, fontSize: 11 }}>Add wedding timeline itinerary slot</ThemedText>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textSecondary} />
+                  </TouchableOpacity>
+                )}
               </View>
             </ThemedView>
           </TouchableOpacity>
@@ -1154,17 +1214,30 @@ export default function DashboardScreen() {
           transparent={true}
           onRequestClose={() => setShowNotificationsTray(false)}
         >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowNotificationsTray(false)}
-          >
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' }}>
+            {/* flexGrow fills leftover space above; tapping closes tray */}
+            <Pressable style={{ flexGrow: 1 }} onPress={() => setShowNotificationsTray(false)} />
+
+            {/* Card sits at the bottom, no wrapper intercepts scroll */}
             <ThemedView
               type="backgroundElement"
-              style={[
-                styles.modalCard,
-                { borderColor: theme.border, backgroundColor: theme.backgroundElement, maxHeight: '80%' },
-              ]}
+              style={{
+                borderColor: theme.border,
+                backgroundColor: theme.backgroundElement,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                borderWidth: 1,
+                maxHeight: Dimensions.get('window').height * 0.75,
+                minHeight: 300,
+                paddingHorizontal: Spacing.four,
+                paddingTop: Spacing.four,
+                paddingBottom: BottomTabInset,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 10,
+                elevation: 12,
+              }}
             >
               <View style={styles.modalHeader}>
                 <ThemedText type="smallBold" style={[styles.modalTitle, { color: theme.text }]}>
@@ -1216,7 +1289,11 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={{ maxHeight: Dimensions.get('window').height * 0.75 - 160 }}
+                showsVerticalScrollIndicator={true}
+                nestedScrollEnabled
+              >
                 {notificationsActiveTab === 'notifications' ? (
                   notifications.length === 0 ? (
                     <View style={styles.trayEmptyState}>
@@ -1329,7 +1406,7 @@ export default function DashboardScreen() {
                 )}
               </ScrollView>
             </ThemedView>
-          </TouchableOpacity>
+          </View>
         </Modal>
       </SafeAreaView>
     </ThemedView>
@@ -1718,7 +1795,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalScroll: {
-    flexGrow: 0,
+    flex: 1,
   },
   modalDetailsSection: {
     gap: Spacing.three,

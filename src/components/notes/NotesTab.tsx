@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { Ionicons } from '@expo/vector-icons';
 import { useToastStore } from '@/stores/toastStore';
 
 import { ThemedText } from '../themed-text';
@@ -39,6 +40,7 @@ export default function NotesTab() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [isPinned, setIsPinned] = useState(false);
+  const [noteType, setNoteType] = useState<'NOTE' | 'CHECKLIST'>('NOTE');
 
   // Queries
   const { data: notesData, isLoading, refetch } = useNotes(currentWorkspace?.id, searchQuery);
@@ -53,14 +55,31 @@ export default function NotesTab() {
     setTitle('');
     setContent('');
     setIsPinned(false);
+    setNoteType('NOTE');
     setShowForm(true);
   };
 
   const handleOpenEdit = (note: NoteItem) => {
     setEditNoteId(note.id);
     setTitle(note.title);
-    setContent(note.content);
     setIsPinned(note.is_pinned);
+    
+    if (note.content?.startsWith('[CHECKLIST]')) {
+      setNoteType('CHECKLIST');
+      // strip the [CHECKLIST] header
+      const rawLines = note.content.split('\n').slice(1);
+      // clean lines for user edit (removing [ ] or [x] markers)
+      const userLines = rawLines.map(line => {
+        if (line.startsWith('[ ]') || line.startsWith('[x]')) {
+          return line.substring(3).trim();
+        }
+        return line;
+      });
+      setContent(userLines.join('\n'));
+    } else {
+      setNoteType('NOTE');
+      setContent(note.content || '');
+    }
     setShowForm(true);
   };
 
@@ -71,13 +90,25 @@ export default function NotesTab() {
       return;
     }
 
+    // Format content if checklist
+    let finalContent = content.trim();
+    if (noteType === 'CHECKLIST') {
+      const processed = content.split('\n').map(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return '';
+        if (trimmed.startsWith('[ ]') || trimmed.startsWith('[x]')) return trimmed;
+        return `[ ] ${trimmed}`;
+      }).filter(Boolean).join('\n');
+      finalContent = `[CHECKLIST]\n${processed}`;
+    }
+
     try {
       if (editNoteId) {
         await updateMutation.mutateAsync({
           id: editNoteId,
           workspaceId: currentWorkspace.id,
           title: title.trim(),
-          content: content.trim(),
+          content: finalContent,
           isPinned,
         });
         showToast('Success', 'Note updated successfully', 'success');
@@ -85,7 +116,7 @@ export default function NotesTab() {
         await createMutation.mutateAsync({
           workspaceId: currentWorkspace.id,
           title: title.trim(),
-          content: content.trim(),
+          content: finalContent,
           isPinned,
         });
         showToast('Success', 'Note created successfully', 'success');
@@ -95,8 +126,34 @@ export default function NotesTab() {
       setContent('');
       setIsPinned(false);
       setEditNoteId(null);
+      setNoteType('NOTE');
     } catch (err: any) {
       showToast('Error', err.message || 'Failed to save note', 'error');
+    }
+  };
+
+  const handleToggleChecklistItem = async (note: NoteItem, lineIndex: number) => {
+    if (!currentWorkspace) return;
+    const lines = note.content.split('\n');
+    const targetLine = lines[lineIndex];
+    if (targetLine.startsWith('[ ]')) {
+      lines[lineIndex] = targetLine.replace('[ ]', '[x]');
+    } else if (targetLine.startsWith('[x]')) {
+      lines[lineIndex] = targetLine.replace('[x]', '[ ]');
+    } else {
+      lines[lineIndex] = `[x] ${targetLine}`;
+    }
+    const newContent = lines.join('\n');
+    try {
+      await updateMutation.mutateAsync({
+        id: note.id,
+        workspaceId: currentWorkspace.id,
+        title: note.title,
+        content: newContent,
+        isPinned: note.is_pinned,
+      });
+    } catch (err: any) {
+      showToast('Error', err.message || 'Failed to toggle item', 'error');
     }
   };
 
@@ -171,14 +228,47 @@ export default function NotesTab() {
             onChangeText={setTitle}
           />
 
+          {/* Note Type Selector */}
+          <ThemedView style={{ flexDirection: 'row', gap: Spacing.two, marginVertical: Spacing.one }}>
+            <TouchableOpacity
+              style={[
+                styles.typeBtn,
+                {
+                  backgroundColor: noteType === 'NOTE' ? theme.text : theme.backgroundSelected,
+                  borderColor: theme.border
+                }
+              ]}
+              onPress={() => setNoteType('NOTE')}
+            >
+              <ThemedText style={{ color: noteType === 'NOTE' ? theme.background : theme.text, fontSize: 12, fontWeight: 'bold' }}>
+                ✍️ Text Note
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.typeBtn,
+                {
+                  backgroundColor: noteType === 'CHECKLIST' ? theme.text : theme.backgroundSelected,
+                  borderColor: theme.border
+                }
+              ]}
+              onPress={() => setNoteType('CHECKLIST')}
+            >
+              <ThemedText style={{ color: noteType === 'CHECKLIST' ? theme.background : theme.text, fontSize: 12, fontWeight: 'bold' }}>
+                ☑️ Checklist
+              </ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+
           <TextInput
             style={[styles.input, styles.textArea, { backgroundColor: theme.background, color: theme.text }]}
-            placeholder="Write note contents here..."
+            placeholder={noteType === 'CHECKLIST' ? "Enter checklist items, one per line:\ne.g.\nBuy floral garlands\nCheck sound system\nConfirm caterers" : "Write note contents here..."}
             placeholderTextColor={theme.textSecondary}
             value={content}
             onChangeText={setContent}
             multiline
-            numberOfLines={4}
+            numberOfLines={10}
+            textAlignVertical="top"
           />
 
           <TouchableOpacity
@@ -266,9 +356,44 @@ export default function NotesTab() {
               </ThemedView>
 
               {note.content ? (
-                <ThemedText type="default" style={styles.noteContent}>
-                  {note.content}
-                </ThemedText>
+                note.content.startsWith('[CHECKLIST]') ? (
+                  <ThemedView style={{ gap: Spacing.one, marginVertical: Spacing.one }}>
+                    {note.content.split('\n').slice(1).map((line, idx) => {
+                      if (!line.trim()) return null;
+                      const isChecked = line.startsWith('[x]');
+                      const text = (line.startsWith('[ ]') || line.startsWith('[x]'))
+                        ? line.substring(3).trim()
+                        : line.trim();
+
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: 4 }}
+                          onPress={() => handleToggleChecklistItem(note, idx + 1)}
+                        >
+                          <Ionicons
+                            name={isChecked ? "checkbox" : "square-outline"}
+                            size={18}
+                            color={isChecked ? "#E91E63" : theme.textSecondary}
+                          />
+                          <ThemedText
+                            style={{
+                              fontSize: 14,
+                              textDecorationLine: isChecked ? 'line-through' : 'none',
+                              color: isChecked ? theme.textSecondary : theme.text
+                            }}
+                          >
+                            {text}
+                          </ThemedText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ThemedView>
+                ) : (
+                  <ThemedText type="default" style={styles.noteContent}>
+                    {note.content}
+                  </ThemedText>
+                )
               ) : (
                 <ThemedText type="small" style={{ opacity: 0.4, fontStyle: 'italic' }}>
                   No content.
@@ -345,9 +470,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(0, 0, 0, 0.1)',
   },
   textArea: {
-    height: 80,
+    height: 180,
     paddingTop: Spacing.two,
     textAlignVertical: 'top',
+  },
+  typeBtn: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   pinToggleRow: {
     flexDirection: 'row',

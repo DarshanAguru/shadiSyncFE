@@ -136,7 +136,7 @@ export default function ExpensesScreen() {
 
   // List filters
   const [selectedFilterTab, setSelectedFilterTab] = useState<'All' | 'Unbilled' | 'By Category' | 'By Member'>('All');
-  const [dateFilter, setDateFilter] = useState<'month' | 'day' | 'all'>('month');
+  const [dateFilter, setDateFilter] = useState<'month' | 'day' | 'all'>('all');
   const [showDurationPicker, setShowDurationPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -424,14 +424,11 @@ export default function ExpensesScreen() {
     );
   }
 
-  // 5. Segment tab filter/sorting
-  if (selectedFilterTab === 'Unbilled') {
-    filteredExpenses = filteredExpenses.filter((e) => !e.event_title);
-  } else if (selectedFilterTab === 'By Category') {
-    filteredExpenses.sort((a, b) => (a.category_name || '').localeCompare(b.category_name || ''));
-  } else if (selectedFilterTab === 'By Member') {
-    filteredExpenses.sort((a, b) => (a.creator_name || '').localeCompare(b.creator_name || ''));
-  }
+  // Sort by date descending always
+  filteredExpenses.sort((a, b) => new Date(b.expense_date).getTime() - new Date(a.expense_date).getTime());
+
+  // Total for current filtered set (shown above list)
+  const filteredTotal = filteredExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
 
   return (
     <ThemedView style={styles.container}>
@@ -1013,32 +1010,6 @@ export default function ExpensesScreen() {
                 </View>
               )}
 
-              {/* HORIZONTAL SEGMENT FILTER TABS */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
-                {(['All', 'Unbilled', 'By Category', 'By Member'] as const).map((tab) => {
-                  const isSelected = selectedFilterTab === tab;
-                  return (
-                     <TouchableOpacity
-                       key={tab}
-                       style={[
-                         styles.filterTabButton,
-                         { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-                         isSelected && { backgroundColor: theme.text }
-                       ]}
-                       onPress={() => setSelectedFilterTab(tab)}
-                     >
-                       <ThemedText
-                         style={[
-                           styles.filterTabLabel,
-                           { color: isSelected ? theme.background : theme.textSecondary }
-                         ]}
-                       >
-                         {tab}
-                       </ThemedText>
-                     </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
 
               {/* LOG EXPENSE BUTTON (MOCK FLOATING BUT ACCESSIBLE ACTION) */}
               {canCreateExpense && (
@@ -1051,7 +1022,14 @@ export default function ExpensesScreen() {
               )}
 
               {/* EXPENSE LOGS LIST */}
-              <ThemedText type="smallBold" style={[styles.listHeaderTitle, { color: theme.text }]}>Recent Expenses</ThemedText>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.three }}>
+                <ThemedText type="smallBold" style={[styles.listHeaderTitle, { color: theme.text }]}>Expenses</ThemedText>
+                {filteredExpenses.length > 0 && (
+                  <ThemedText type="small" style={{ color: '#E91E63', fontWeight: 'bold', fontSize: 13 }}>
+                    {filteredExpenses.length} entries · ₹{filteredTotal.toLocaleString('en-IN')}
+                  </ThemedText>
+                )}
+              </View>
               
               {filteredExpenses.length === 0 ? (
                 <ThemedView type="backgroundElement" style={[styles.emptyCard, { borderColor: theme.border }]}>
@@ -1206,7 +1184,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   totalSpentValue: {
-    fontSize: 32,
+    fontSize: 30,
+    lineHeight: 34,
     fontWeight: 'bold',
   },
   subStatsContainer: {
@@ -1228,6 +1207,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   subStatValue: {
+    lineHeight: 18,
     fontSize: 12,
   },
   editAllocationLink: {

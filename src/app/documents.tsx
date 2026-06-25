@@ -7,11 +7,14 @@ import {
   ActivityIndicator,
   Platform,
   View,
+  Modal,
   RefreshControl,
-  Linking,
-  Alert,
   BackHandler,
 } from 'react-native';
+import ReactNativeBlobUtil from 'react-native-blob-util';
+import mime from 'mime';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import { useToastStore } from '@/stores/toastStore';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
@@ -110,6 +113,11 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
   const [folderName, setFolderName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
+  // Document actions modal states
+  const [actionDoc, setActionDoc] = useState<any | null>(null);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+
   // Queries
   const { data: foldersData, isLoading: foldersLoading, refetch: refetchFolders } = useFolders(currentWorkspace?.id);
   const { data: docsData, isLoading: docsLoading, refetch: refetchDocs } = useDocumentsList(
@@ -157,6 +165,76 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
       setShowFolderForm(false);
     } catch (err: any) {
       showToast('Error', err.message || 'Failed to create folder', 'error');
+    }
+  };
+
+  const handleDownloadDoc = async (doc: any, action: 'DOWNLOAD' | 'SHARE' | 'VIEW') => {
+    const resolved = resolveFileUrl(doc.file_url);
+    
+    if (action === 'VIEW') {
+      WebBrowser.openBrowserAsync(resolved).catch(() => {
+        showToast('Error', 'Could not open document link', 'error');
+      });
+      return;
+    }
+
+    if (Platform.OS === 'web') {
+      try {
+        const link = document.createElement('a');
+        link.href = resolved;
+        link.download = doc.name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (e) {
+        window.open(resolved, '_blank');
+      }
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      
+      const filename = doc.name.includes('_') && !isNaN(Number(doc.name.split('_')[0]))
+        ? doc.name.slice(doc.name.indexOf('_') + 1)
+        : doc.name;
+      const fileUri = `${FileSystem.documentDirectory}${filename}`;
+
+      if (action === "DOWNLOAD") {
+        const path = `${ReactNativeBlobUtil.fs.dirs.DownloadDir}/${filename}`;
+        try {
+            await ReactNativeBlobUtil.config({
+              path,
+              addAndroidDownloads: {
+                useDownloadManager: true,
+                notification: true,
+                title: filename,
+                path,
+                mime: mime.getType(filename) || "application/octet-steam",
+                mediaScannable: true,
+              },
+            }).fetch('GET', resolved);
+            showToast('Success', 'File downloaded successfully', 'success');
+        } catch (err) {
+         throw new Error('Download failed');
+        }
+      } else {
+
+      const downloadRes = await FileSystem.downloadAsync(resolved, fileUri);
+
+      if (downloadRes.status !== 200) {
+        throw new Error('Download failed');
+      }
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(downloadRes.uri);
+        } else {
+          showToast('Info', 'Sharing not available on this device', 'info');
+        }
+    } 
+  }catch (err: any) {
+      showToast('Error', err.message || 'Failed to process document action', 'error');
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -495,69 +573,8 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
                       <TouchableOpacity
                         style={{ padding: 8 }}
                         onPress={() => {
-                          const buttons: any[] = [
-                            {
-                              text: 'View',
-                              onPress: () => {
-                                const resolved = resolveFileUrl(doc.file_url);
-                                WebBrowser.openBrowserAsync(resolved).catch(() => {
-                                  showToast('Error', 'Could not open document link', 'error');
-                                });
-                              },
-                            },
-                            {
-                              text: 'Download',
-                              onPress: () => {
-                                const resolved = resolveFileUrl(doc.file_url);
-                                Linking.openURL(resolved).catch(() => {
-                                  showToast('Error', 'Could not start download', 'error');
-                                });
-                              },
-                            },
-                          ];
-
-                          if (canDelete) {
-                            buttons.push({
-                              text: 'Delete',
-                              style: 'destructive',
-                              onPress: () => {
-                                Alert.alert(
-                                  'Confirm Delete',
-                                  'Are you sure you want to delete this document?',
-                                  [
-                                    { text: 'Cancel', style: 'cancel' },
-                                    {
-                                      text: 'Delete',
-                                      style: 'destructive',
-                                      onPress: () => {
-                                        deleteDocMutation.mutateAsync({
-                                          id: doc.id,
-                                          workspaceId: currentWorkspace?.id || '',
-                                        }).then(() => {
-                                          showToast('Success', 'Document deleted successfully', 'success');
-                                        }).catch((err: any) => {
-                                          showToast('Error', err.message || 'Failed to delete document', 'error');
-                                        });
-                                      },
-                                    },
-                                  ]
-                                );
-                              },
-                            });
-                          }
-
-                          buttons.push({
-                            text: 'Cancel',
-                            style: 'cancel',
-                            onPress: () => {},
-                          });
-
-                          Alert.alert(
-                            'Document Actions',
-                            `Options for ${doc.name.includes('_') && !isNaN(Number(doc.name.split('_')[0])) ? doc.name.slice(doc.name.indexOf('_') + 1) : doc.name}`,
-                            buttons,
-                            { cancelable: true }
-                          );
+                          setActionDoc(doc);
+                          setShowActionModal(true);
                         }}
                       >
                         <Ionicons name="ellipsis-vertical" size={20} color={theme.text} />
@@ -569,6 +586,96 @@ export default function DocumentsScreen({ nested = false }: { nested?: boolean }
             </ThemedView>
 
           </ScrollView>
+
+          {/* Custom Bottom Actions sheet popup Modal */}
+          <Modal
+            visible={showActionModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowActionModal(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setShowActionModal(false)}
+            >
+              <ThemedView type="backgroundElement" style={[styles.modalSheet, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+                <View style={styles.sheetHeader}>
+                  <ThemedText type="smallBold" style={{ fontSize: 16 }}>
+                    {actionDoc ? (actionDoc.name.includes('_') && !isNaN(Number(actionDoc.name.split('_')[0])) ? actionDoc.name.slice(actionDoc.name.indexOf('_') + 1) : actionDoc.name) : 'Document Options'}
+                  </ThemedText>
+                  <TouchableOpacity onPress={() => setShowActionModal(false)} style={styles.sheetCloseBtn}>
+                    <Ionicons name="close" size={20} color={theme.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.sheetOptions}>
+                  <TouchableOpacity
+                    style={[styles.sheetOptionItem, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      if (actionDoc) handleDownloadDoc(actionDoc, 'VIEW');
+                    }}
+                  >
+                    <Ionicons name="eye-outline" size={20} color="#E91E63" />
+                    <ThemedText style={{ fontWeight: '500' }}>View File</ThemedText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.sheetOptionItem, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      if (actionDoc) handleDownloadDoc(actionDoc, 'DOWNLOAD');
+                    }}
+                    disabled={isDownloading}
+                  >
+                    {isDownloading ? (
+                      <ActivityIndicator size="small" color="#E91E63" />
+                    ) : (
+                      <Ionicons name="download-outline" size={20} color="#E91E63" />
+                    )}
+                    <ThemedText style={{ fontWeight: '500' }}>
+                      {isDownloading ? 'Downloading...' : 'Download File'}
+                    </ThemedText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.sheetOptionItem, { backgroundColor: theme.backgroundSelected }]}
+                    onPress={() => {
+                      setShowActionModal(false);
+                      if (actionDoc) handleDownloadDoc(actionDoc, 'SHARE');
+                    }}
+                  >
+                    <Ionicons name="open-outline" size={20} color="#E91E63" />
+                    <ThemedText style={{ fontWeight: '500' }}>Open With / Share</ThemedText>
+                  </TouchableOpacity>
+
+                  {canDelete && (
+                    <TouchableOpacity
+                      style={[styles.sheetOptionItem, { backgroundColor: 'rgba(255, 59, 48, 0.08)' }]}
+                      onPress={async () => {
+                        setShowActionModal(false);
+                        if (!actionDoc) return;
+                        try {
+                          await deleteDocMutation.mutateAsync({
+                            id: actionDoc.id,
+                            workspaceId: currentWorkspace?.id || '',
+                          });
+                          showToast('Success', 'Document deleted successfully', 'success');
+                        } catch (err: any) {
+                          showToast('Error', err.message || 'Failed to delete document', 'error');
+                        }
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={20} color="#ff3b30" />
+                      <ThemedText style={{ color: '#ff3b30', fontWeight: 'bold' }}>Delete Document</ThemedText>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </ThemedView>
+            </TouchableOpacity>
+          </Modal>
+
         </WorkspaceGuard>
       </ContainerView>
     </ThemedView>
@@ -737,5 +844,37 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: 0,
     marginLeft: Spacing.one,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: Spacing.four,
+    borderWidth: 1,
+    gap: Spacing.three,
+    paddingBottom: Spacing.five,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.one,
+  },
+  sheetCloseBtn: {
+    padding: 4,
+  },
+  sheetOptions: {
+    gap: Spacing.two,
+  },
+  sheetOptionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    padding: Spacing.three,
+    borderRadius: 10,
   },
 });
